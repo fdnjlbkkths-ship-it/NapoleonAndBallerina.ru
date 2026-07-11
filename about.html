@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="О кондитерской Sweet Master — история, процесс приготовления и наша миссия. С 2015 года создаём сладкие шедевры.">
+  <title>О нас — Sweet Master</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Montserrat:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="loader" class="loader" aria-hidden="true">
+    <div class="loader__spinner"></div>
+    <p class="loader__text">Sweet Master</p>
+  </div>
+
+  <header class="header" role="banner">
+    <div class="container header__inner">
+      <a href="index.html" class="header__logo" aria-label="Sweet Master — на главную">
+        <span>🍰</span> Sweet Master
+      </a>
+      <nav class="header__nav" aria-label="Основная навигация">
+        <a href="index.html" class="header__link">Главная</a>
+        <a href="menu.html" class="header__link">Меню</a>
+        <a href="about.html" class="header__link">О нас</a>
+        <a href="contacts.html" class="header__link">Контакты</a>
+      </nav>
+      <div class="header__actions">
+        <button id="cart-btn" class="header__cart-btn" aria-label="Открыть корзину">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zM1 2v2h2l3.6 7.59-1.35 2.45c-.16.28-.25.61-.25.96 0 1.1.9 2 2 2h12v-2H7.42c-.14 0-.25-.11-.25-.25l.03-.12.9-1.63h7.45c.75 0 1.41-.41 1.75-1.03l3.58-6.49A1 1 0 0020 4H5.21l-.94-2H1zm16 16c-1.1 0-1.99.9-1.99 2s.89 2 1.99 2 2-.9 2-2-.9-2-2-2z"/></svg>
+          <span id="cart-count" class="header__cart-count" data-count="0">0</span>
+        </button>
+        <button id="burger" class="header__burger" aria-label="Открыть меню">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <nav id="mobile-menu" class="mobile-menu" aria-label="Мобильное меню">
+    <ul class="mobile-menu__list">
+      <li><a href="index.html" class="mobile-menu__link">Главная</a></li>
+      <li><a href="menu.html" class="mobile-menu__link">Меню</a></li>
+      <li><a href="about.html" class="mobile-menu__link">О нас</a></li>
+      <li><a href="contacts.html" class="mobile-menu__link">Контакты</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <header class="about-hero">
+      <div class="container">
+        <h1 data-animate>О Sweet Master</h1>
+        <p class="section__subtitle" data-animate>История, страсть и любовь к сладкому</p>
+      </div>
+    </header>
+
+    <section class="section" aria-labelledby="story-title">
+      <div class="container">
+        <div class="about-story">
+          <div class="about-story__content" data-animate>
+            <h2 id="story-title">Наша история</h2>
+            <p>В 2015 году Мария Иванова открыла маленькую кондитерскую на уютной улочке в центре Москвы. Начав с нескольких рецептов бабушки, она мечтала делиться теплом домашней выпечки с каждым гостем.</p>
+            <p style="margin-top: 1rem;">Сегодня Sweet Master — это команда из 12 кондитеров, собственная пекарня и сотни довольных клиентов. Мы по-прежнему замешиваем тесто вручную, отбираем ягоды на рынке и не используем искусственных красителей.</p>
+          </div>
+          <div class="about-story__image" data-animate>
+            <img src="https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=800&q=80" alt="Кондитер за работой в пекарне Sweet Master" loading="lazy" width="800" height="600">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section process" aria-labelledby="process-title">
+      <div class="container">
+        <h2 class="section__title" id="process-title" data-animate>Как мы готовим</h2>
+        <p class="section__subtitle" data-animate>Каждый десерт проходит путь от идеи до вашего стола</p>
+        <div class="process__grid">
+          <article class="process-card" data-animate>
+            <div class="process-card__image">
+              <img src="https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400&q=80" alt="Отбор свежих ингредиентов" loading="lazy" width="400" height="400">
+            </div>
+            <h3 class="process-card__title">1. Ингредиенты</h3>
+            <p class="process-card__text">Отбираем только свежие продукты у проверенных поставщиков</p>
+          </article>
+          <article class="process-card" data-animate>
+            <div class="process-card__image">
+              <img src="https://images.unsplash.com/photo-1571115764595-644a1f56a55c?w=400&q=80" alt="Замешивание теста вручную" loading="lazy" width="400" height="400">
+            </div>
+            <h3 class="process-card__title">2. Приготовление</h3>
+            <p class="process-card__text">Замешиваем, выпекаем и украшаем каждое изделие вручную</p>
+          </article>
+          <article class="process-card" data-animate>
+            <div class="process-card__image">
+              <img src="https://images.unsplash.com/photo-1464349095431-e9a21285b5aa?w=400&q=80" alt="Украшение торта" loading="lazy" width="400" height="400">
+            </div>
+            <h3 class="process-card__title">3. Украшение</h3>
+            <p class="process-card__text">Создаём красивые композиции из крема, ягод и шоколада</p>
+          </article>
+          <article class="process-card" data-animate>
+            <div class="process-card__image">
+              <img src="https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&q=80" alt="Готовый торт на витрине" loading="lazy" width="400" height="400">
+            </div>
+            <h3 class="process-card__title">4. Подача</h3>
+            <p class="process-card__text">Доставляем свежим — к вашему столу или прямо домой</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="mission-title">
+      <div class="container">
+        <div class="mission" data-animate>
+          <div class="mission__icon">💝</div>
+          <h2 id="mission-title">Наша миссия</h2>
+          <p>Мы верим, что десерт — это не просто еда, а эмоция. Наша миссия — создавать сладкие моменты радости для каждого: будь то семейный ужин, день рождения или просто хороший вторник.</p>
+          <p style="margin-top: 1rem;">Натуральность, качество и забота — три столпа, на которых стоит Sweet Master.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section cta-section">
+      <div class="container">
+        <h2 class="section__title" data-animate>Попробуйте сами</h2>
+        <p data-animate>Загляните в наше меню и выберите что-нибудь вкусное</p>
+        <a href="menu.html" class="btn btn--primary" data-animate>Открыть меню</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <div class="container">
+      <div class="footer__grid">
+        <div>
+          <div class="footer__brand">Sweet Master</div>
+          <p class="footer__text">Кондитерская, где каждый десерт — произведение искусства.</p>
+        </div>
+        <div>
+          <h3 class="footer__title">Навигация</h3>
+          <a href="index.html" class="footer__link">Главная</a>
+          <a href="menu.html" class="footer__link">Меню</a>
+          <a href="about.html" class="footer__link">О нас</a>
+          <a href="contacts.html" class="footer__link">Контакты</a>
+        </div>
+        <div>
+          <h3 class="footer__title">Контакты</h3>
+          <a href="tel:+74951234567" class="footer__link">+7 (495) 123-45-67</a>
+          <a href="mailto:hello@sweetmaster.ru" class="footer__link">hello@sweetmaster.ru</a>
+        </div>
+      </div>
+      <div class="footer__bottom">&copy; 2026 Sweet Master. Все права защищены.</div>
+    </div>
+  </footer>
+
+  <div id="cart-overlay" class="modal-overlay" aria-hidden="true"></div>
+  <aside id="cart-modal" class="cart-modal" role="dialog" aria-label="Корзина" aria-modal="true">
+    <div class="cart-modal__header">
+      <h2 class="cart-modal__title">Корзина</h2>
+      <button id="cart-close" class="cart-modal__close" aria-label="Закрыть корзину">&times;</button>
+    </div>
+    <div id="cart-body" class="cart-modal__body"></div>
+    <div class="cart-modal__footer">
+      <div class="cart-modal__total">
+        <span>Итого:</span>
+        <span id="cart-total-price">0 ₽</span>
+      </div>
+      <button id="cart-checkout" class="btn btn--primary btn--full">Оформить заказ</button>
+    </div>
+  </aside>
+
+  <script type="module" src="/src/js/main.js"></script>
+</body>
+</html>
