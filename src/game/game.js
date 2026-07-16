@@ -735,9 +735,15 @@ function animateDropIn(symbols, multipliers, marks) {
 }
 
 async function animateUpgrades(upgrades) {
+  // Multipliers are sticky and do not grow — skip pulse when nothing changed.
+  const changed = (upgrades || []).filter(
+    (up) => up.before.mult !== up.after.mult || up.before.marked !== up.after.marked,
+  );
+  if (!changed.length) return;
+
   const tl = gsap.timeline();
   const pulseEls = [];
-  for (const up of upgrades) {
+  for (const up of changed) {
     const node = cellNodes[up.cell];
     const m = up.after.mult;
     node.el.classList.add('is-marked');

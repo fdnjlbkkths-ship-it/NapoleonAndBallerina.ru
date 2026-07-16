@@ -43,24 +43,20 @@ function seeded(seed = 1) {
   assert.equal(findClusters(symbols).length, 0);
 }
 
-// Official: mark → ×2 → ×4 → ×8
+// Sticky: explode does not grow or move multipliers
 {
   const state = createGameState(seeded(1));
   const cell = 10;
-  assert.equal(state.multipliers[cell], 0);
-
-  applyExplodeMarks(state, [cell]);
-  assert.equal(state.marks[cell], true);
-  assert.equal(state.multipliers[cell], 0);
-
-  applyExplodeMarks(state, [cell]);
-  assert.equal(state.multipliers[cell], 2);
+  state.multipliers[cell] = 4;
+  state.marks[cell] = true;
 
   applyExplodeMarks(state, [cell]);
   assert.equal(state.multipliers[cell], 4);
+  assert.equal(state.marks[cell], true);
 
   applyExplodeMarks(state, [cell]);
-  assert.equal(state.multipliers[cell], 8);
+  assert.equal(state.multipliers[cell], 4);
+  assert.equal(state.marks[cell], true);
 }
 
 {
@@ -95,13 +91,16 @@ function seeded(seed = 1) {
 {
   const state = createGameState(seeded(99));
   state.symbols = Array(GRID_SIZE * GRID_SIZE).fill('berry');
+  state.multipliers[0] = 8;
+  state.marks[0] = true;
   const step = resolveTumbleStep(state);
   assert.ok(step);
   assert.ok(step.stepWin > 0);
-  // First explode only marks
+  // Multipliers stay put through explode + cascade
+  assert.equal(step.multipliersAfter[0], 8);
+  assert.equal(step.marksAfter[0], true);
   for (const cell of step.winningCells) {
-    assert.equal(step.multipliersAfter[cell], 0);
-    assert.equal(step.marksAfter[cell], true);
+    assert.equal(step.multipliersAfter[cell], cell === 0 ? 8 : 0);
   }
 }
 
