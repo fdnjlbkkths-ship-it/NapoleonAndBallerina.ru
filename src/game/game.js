@@ -207,13 +207,13 @@ function floatWin(amount) {
       y: -52,
       opacity: 1,
       scale: 1.15,
-      duration: reduceMotion ? 0.01 : 0.5,
+      duration: reduceMotion ? 0.01 : 0.7,
       ease: 'power3.out',
       onComplete: () => {
         gsap.to(node, {
           opacity: 0,
           y: -80,
-          duration: 0.3,
+          duration: 0.4,
           onComplete: () => node.remove(),
         });
       },
@@ -228,37 +228,44 @@ async function showWinBanner(amount) {
   await gsap.fromTo(
     els.winBanner,
     { opacity: 0, scale: 0.7 },
-    { opacity: 1, scale: 1, duration: reduceMotion ? 0.01 : 0.35, ease: 'back.out(1.6)' },
+    { opacity: 1, scale: 1, duration: reduceMotion ? 0.01 : 0.5, ease: 'back.out(1.6)' },
   );
-  await wait(650);
+  await wait(900);
   await gsap.to(els.winBanner, {
     opacity: 0,
     scale: 1.08,
-    duration: reduceMotion ? 0.01 : 0.25,
+    duration: reduceMotion ? 0.01 : 0.35,
   });
   els.winBanner.classList.add('is-hidden');
 }
 
+/** Drop every cell from top, column by column, one after another. */
 function animateDropIn(symbols, multipliers, marks) {
   paintBoard(symbols, multipliers, marks, []);
   if (reduceMotion) return Promise.resolve();
 
   const size = cellSize();
-  const glyphs = cellNodes.map((n) => n.glyph);
-  gsap.set(glyphs, { y: (i) => -size * (1 + (i % GRID_SIZE) * 0.15), opacity: 0 });
-
-  return gsap.to(glyphs, {
-    y: 0,
-    opacity: 1,
-    duration: 0.42,
-    stagger: {
-      each: 0.012,
-      from: 'start',
-      grid: [GRID_SIZE, GRID_SIZE],
-      axis: 'y',
-    },
-    ease: 'bounce.out',
-  });
+  const tl = gsap.timeline();
+  let t = 0;
+  for (let c = 0; c < GRID_SIZE; c += 1) {
+    for (let r = 0; r < GRID_SIZE; r += 1) {
+      const i = r * GRID_SIZE + c;
+      const glyph = cellNodes[i].glyph;
+      gsap.set(glyph, { y: -size * (r + 2), opacity: 0 });
+      tl.to(
+        glyph,
+        {
+          y: 0,
+          opacity: 1,
+          duration: 0.55,
+          ease: 'bounce.out',
+        },
+        t,
+      );
+      t += 0.055;
+    }
+  }
+  return tl;
 }
 
 async function animateUpgrades(upgrades) {
@@ -277,12 +284,71 @@ async function animateUpgrades(upgrades) {
       tl.fromTo(
         node.mult,
         { scale: 0.55, opacity: 0.5 },
-        { scale: 1.2, opacity: 1, duration: 0.22, ease: 'back.out(2.2)', yoyo: true, repeat: 1 },
-        '<0.02',
+        { scale: 1.25, opacity: 1, duration: 0.35, ease: 'back.out(2.2)', yoyo: true, repeat: 1 },
+        '<0.04',
       );
     }
   }
   if (!reduceMotion) await tl;
+}
+
+/** Existing pieces slide down, then new ones drop from top one-by-one. */
+async function animateCascadeFalls(step) {
+  const size = cellSize();
+
+  // 1) Show board after gravity (holes on top), slide survivors down.
+  paintBoard(step.symbolsAfterGravity, step.multipliersAfter, step.marksAfter, []);
+  for (const i of step.newDropCells || []) {
+    cellNodes[i].glyph.textContent = '';
+  }
+
+  if (!reduceMotion && step.slideCells?.length) {
+    const tl = gsap.timeline();
+    for (const i of step.slideCells) {
+      const dist = step.fallDistance[i] || 0;
+      if (dist <= 0) continue;
+      gsap.set(cellNodes[i].glyph, { y: -dist * size });
+      tl.to(
+        cellNodes[i].glyph,
+        { y: 0, duration: 0.5, ease: 'power2.out' },
+        0,
+      );
+    }
+    await tl;
+  }
+
+  // 2) New blocks fall from above one after another (column → row).
+  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+  if (reduceMotion) return;
+
+  const drops = step.newDropCells || [];
+  // Hide new drops first, keep others in place.
+  for (const i of drops) {
+    gsap.set(cellNodes[i].glyph, { y: -size * (step.fallDistance[i] || 2), opacity: 0 });
+  }
+
+  const tl = gsap.timeline();
+  let t = 0;
+  for (const i of drops) {
+    const dist = Math.max(2, step.fallDistance[i] || 2);
+    tl.fromTo(
+      cellNodes[i].glyph,
+      { y: -dist * size, opacity: 0 },
+      {
+        y: 0,
+        opacity: 1,
+        duration: 0.58,
+        ease: 'bounce.out',
+      },
+      t,
+    );
+    t += 0.09; // друг за другом
+  }
+  await tl;
+  gsap.set(
+    cellNodes.map((n) => n.glyph),
+    { clearProps: 'transform,opacity' },
+  );
 }
 
 async function animateStep(step) {
@@ -295,14 +361,14 @@ async function animateStep(step) {
     await gsap
       .timeline()
       .to(winEls, {
-        scale: 1.1,
-        duration: 0.14,
+        scale: 1.12,
+        duration: 0.28,
         ease: 'power1.out',
-        stagger: 0.012,
+        stagger: 0.03,
       })
       .to(winEls, {
         scale: 1,
-        duration: 0.12,
+        duration: 0.22,
         ease: 'power1.in',
       });
   }
@@ -312,46 +378,23 @@ async function animateStep(step) {
 
   if (!reduceMotion) {
     await gsap.to(winGlyphs, {
-      scale: 1.35,
+      scale: 1.4,
       opacity: 0,
-      duration: 0.2,
-      stagger: 0.01,
+      duration: 0.38,
+      stagger: 0.025,
       ease: 'power2.in',
     });
   }
 
-  // After explode: show marks/mult upgrades on emptied cells, then tumble.
   for (const i of step.winningCells) {
     cellNodes[i].glyph.textContent = '';
     gsap.set(cellNodes[i].glyph, { clearProps: 'transform,opacity' });
   }
 
   await animateUpgrades(step.upgrades);
-
-  // Paint final board and animate falls.
-  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
-  if (!reduceMotion) {
-    const size = cellSize();
-    const glyphs = cellNodes.map((n) => n.glyph);
-    gsap.set(glyphs, {
-      y: (i) => -Math.max(0, step.fallDistance[i]) * size,
-      opacity: 1,
-    });
-    await gsap.to(glyphs, {
-      y: 0,
-      duration: 0.38,
-      stagger: {
-        each: 0.01,
-        from: 'end',
-        grid: [GRID_SIZE, GRID_SIZE],
-        axis: 'y',
-      },
-      ease: 'bounce.out',
-    });
-    gsap.set(glyphs, { clearProps: 'transform' });
-  }
-
-  await wait(90);
+  await wait(180);
+  await animateCascadeFalls(step);
+  await wait(220);
 }
 
 async function runResult(result) {

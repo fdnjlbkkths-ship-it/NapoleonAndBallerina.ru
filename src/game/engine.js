@@ -228,12 +228,18 @@ export function resolveTumbleStep(state) {
   const uniqueWins = [...new Set(winningCells)];
   for (const cell of uniqueWins) state.symbols[cell] = null;
 
-  // Marks/multipliers update on exploded positions (original rule).
+  // Exploded cells double their multipliers (all start at ×2).
   const upgrades = applyExplodeMarks(state, uniqueWins);
 
   const { fallDistance } = applyGravityWithFalls(state.symbols);
+  const symbolsAfterGravity = [...state.symbols];
+  const slideCells = [];
+  for (let i = 0; i < fallDistance.length; i += 1) {
+    if (fallDistance[i] > 0 && symbolsAfterGravity[i]) slideCells.push(i);
+  }
 
-  // Fill empties from top; new pieces drop in from above the board.
+  // New pieces drop from the top — listed top→bottom, left→right for sequential anim.
+  const newDropCells = [];
   for (let c = 0; c < GRID_SIZE; c += 1) {
     let empties = 0;
     for (let r = 0; r < GRID_SIZE; r += 1) {
@@ -245,6 +251,7 @@ export function resolveTumbleStep(state) {
       if (!state.symbols[i]) {
         state.symbols[i] = pickWeightedSymbol(state.random);
         fallDistance[i] = r + 1 + (empties - spawn);
+        newDropCells.push(i);
         spawn += 1;
       }
     }
@@ -256,6 +263,9 @@ export function resolveTumbleStep(state) {
     stepWin: +stepWin.toFixed(2),
     upgrades,
     fallDistance: [...fallDistance],
+    slideCells,
+    newDropCells,
+    symbolsAfterGravity,
     symbolsBefore,
     multipliersBefore,
     marksBefore,
