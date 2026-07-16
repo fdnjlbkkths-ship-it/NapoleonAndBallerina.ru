@@ -692,6 +692,11 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
+/* Splash extras once full stylesheet loads */
+.splash__candy span {
+  will-change: transform;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

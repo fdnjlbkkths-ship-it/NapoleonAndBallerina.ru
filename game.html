@@ -11,8 +11,102 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* Critical splash — visible before JS/CSS modules load */
+    .splash {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(90% 60% at 50% -10%, rgba(255, 77, 141, 0.4), transparent 55%),
+        radial-gradient(70% 50% at 100% 40%, rgba(123, 92, 255, 0.3), transparent 50%),
+        linear-gradient(180deg, #2a1450, #140a24);
+      color: #fff7fb;
+      font-family: Nunito, system-ui, sans-serif;
+    }
+    .splash.is-done { pointer-events: none; }
+    .splash__inner { width: min(100%, 320px); text-align: center; }
+    .splash__candy {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      font-size: 2rem;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,.35));
+    }
+    .splash__candy span { display: inline-block; animation: splash-bob 1.1s ease-in-out infinite; }
+    .splash__candy span:nth-child(2) { animation-delay: .12s; }
+    .splash__candy span:nth-child(3) { animation-delay: .24s; }
+    .splash__candy span:nth-child(4) { animation-delay: .36s; }
+    .splash__candy span:nth-child(5) { animation-delay: .48s; }
+    @keyframes splash-bob {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-10px) scale(1.08); }
+    }
+    .splash__logo {
+      font-family: Fredoka, Nunito, system-ui, sans-serif;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .splash__logo-sweet { color: #ffb3d1; font-size: 2.4rem; text-shadow: 0 3px 0 #c43b6e; margin-right: 8px; }
+    .splash__logo-rush { color: #ffd45a; font-size: 2.4rem; text-shadow: 0 3px 0 #c47a10; margin-right: 8px; }
+    .splash__logo-1k {
+      display: inline-block;
+      font-size: 1.1rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      vertical-align: middle;
+      background: linear-gradient(180deg, #fff, #ffd45a);
+      color: #5a2a00;
+      box-shadow: 0 3px 0 #c47a10;
+    }
+    .splash__tag { margin: 0 0 22px; opacity: .7; font-size: .9rem; }
+    .splash__bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.16);
+    }
+    .splash__bar-fill {
+      height: 100%;
+      width: 12%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #ff4d8d, #ffd45a 55%, #7b5cff);
+      box-shadow: 0 0 16px rgba(255, 77, 141, .55);
+      transition: width .25s ease;
+    }
+    .splash__pct {
+      margin-top: 10px;
+      font-family: Fredoka, Nunito, system-ui, sans-serif;
+      font-size: 1.1rem;
+      color: #ffd45a;
+    }
+  </style>
 </head>
 <body>
+  <div class="splash" id="splash" role="status" aria-live="polite" aria-label="Загрузка Sweet Rush">
+    <div class="splash__inner">
+      <div class="splash__candy" aria-hidden="true">
+        <span>🥐</span><span>🎂</span><span>🍨</span><span>🧁</span><span>🍓</span>
+      </div>
+      <div class="splash__logo">
+        <span class="splash__logo-sweet">SWEET</span>
+        <span class="splash__logo-rush">RUSH</span>
+        <span class="splash__logo-1k">1000</span>
+      </div>
+      <p class="splash__tag">Готовим сладкий бонус…</p>
+      <div class="splash__bar" aria-hidden="true">
+        <div class="splash__bar-fill" id="splash-bar"></div>
+      </div>
+      <div class="splash__pct" id="splash-pct">0%</div>
+    </div>
+  </div>
+
   <main class="slot" id="app">
     <header class="slot__header">
       <div class="logo">

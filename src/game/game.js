@@ -706,14 +706,60 @@ function bind() {
   });
 }
 
-function boot() {
+function setSplashProgress(pct) {
+  const bar = document.getElementById('splash-bar');
+  const label = document.getElementById('splash-pct');
+  const value = Math.max(0, Math.min(100, Math.round(pct)));
+  if (bar) bar.style.width = `${value}%`;
+  if (label) label.textContent = `${value}%`;
+}
+
+async function hideSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  splash.classList.add('is-done');
+  if (reduceMotion) {
+    splash.remove();
+    return;
+  }
+  await gsap.to(splash, {
+    autoAlpha: 0,
+    scale: 1.04,
+    duration: 0.55,
+    ease: 'power2.inOut',
+  });
+  splash.remove();
+}
+
+async function boot() {
+  setSplashProgress(8);
   initTelegram();
+  setSplashProgress(22);
+  await wait(180);
+
   buildBoard();
+  setSplashProgress(48);
+  await wait(160);
+
   fillEmptyCells(state);
   paintBoard(state.symbols, state.multipliers, state.marks, []);
+  setSplashProgress(72);
+  await wait(160);
+
   bind();
   updateHud();
   els.status.textContent = 'Все клетки ×2 · кластер 5+ удваивает множитель и меняет цвет · 1 Вардин = 1 ₽';
+  setSplashProgress(92);
+  await wait(220);
+
+  setSplashProgress(100);
+  await wait(180);
+  await hideSplash();
+
+  // Soft intro on the board after splash
+  if (!reduceMotion) {
+    gsap.from('.slot', { opacity: 0, y: 16, duration: 0.45, ease: 'power2.out' });
+  }
 }
 
 boot();
