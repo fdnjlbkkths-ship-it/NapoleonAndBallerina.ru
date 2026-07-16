@@ -256,29 +256,18 @@ async function explodeCells(winningCells) {
     return;
   }
 
-  const winEls = winningCells.map((i) => cellNodes[i].el);
   const winGlyphs = winningCells.map((i) => cellNodes[i].glyph);
 
-  // 1) Anticipation pulse + glow
+  // 1) Anticipation on glyphs only — cell boxes stay fixed size
   await gsap
     .timeline()
-    .to(winEls, {
-      scale: 1.1,
+    .to(winGlyphs, {
+      scale: 1.22,
+      filter: 'brightness(1.4) saturate(1.25)',
       duration: 0.26,
       ease: 'power2.out',
       stagger: { each: 0.02, from: 'center' },
     })
-    .to(
-      winGlyphs,
-      {
-        scale: 1.22,
-        filter: 'brightness(1.4) saturate(1.25)',
-        duration: 0.26,
-        ease: 'power2.out',
-        stagger: { each: 0.02, from: 'center' },
-      },
-      '<',
-    )
     .to(winGlyphs, {
       scaleX: 1.28,
       scaleY: 0.82,
@@ -328,22 +317,11 @@ async function explodeCells(winningCells) {
     flyTl.add(() => {
       burstShockwave(i);
       burstSparks(i, 14);
-    }, start);
-
-    flyTl.to(
-      node.el,
-      {
-        scale: 1,
-        duration: 0.4,
-        ease: 'power2.out',
-        onComplete: () => node.el.classList.remove('is-exploding'),
-      },
-      start + 0.18,
-    );
+      node.el.classList.remove('is-exploding');
+    }, start + 0.18);
   });
 
   await flyTl;
-  gsap.set(winEls, { clearProps: 'transform' });
 }
 
 function floatWin(amount) {
