@@ -1,7 +1,11 @@
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
 
+// Local/dev: `/`. GitHub Pages project site: set VITE_BASE=/NapoleonAndBallerina.ru/
+const base = process.env.VITE_BASE || '/';
+
 export default defineConfig({
+  base,
   build: {
     rollupOptions: {
       input: {
