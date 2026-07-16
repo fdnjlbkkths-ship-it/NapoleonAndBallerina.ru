@@ -3,6 +3,7 @@ import {
   GRID_SIZE,
   MIN_CLUSTER,
   MULT_LADDER,
+  MATCH_BIAS,
   createGameState,
   fillEmptyCells,
   findClusters,
@@ -15,6 +16,7 @@ import {
   nextMultiplier,
   multTier,
 } from './engine.js';
+import { pickBiasedSymbol } from './symbols.js';
 
 function seeded(seed = 1) {
   let s = seed;
@@ -101,6 +103,19 @@ function seeded(seed = 1) {
   assert.equal(fs.ok, true);
   assert.equal(state.mode, 'bonus');
   assert.ok(state.multipliers[0] >= 8);
+}
+
+{
+  assert.equal(MATCH_BIAS, 3);
+  // Biased picker should favour the neighbour id far more often than uniform.
+  const board = Array(GRID_SIZE * GRID_SIZE).fill(null);
+  board[1] = 'cake'; // neighbour of index 0
+  let cake = 0;
+  const n = 2000;
+  for (let i = 0; i < n; i += 1) {
+    if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, 3) === 'cake') cake += 1;
+  }
+  assert.ok(cake / n > 0.25, `expected frequent cake matches, got ${cake / n}`);
 }
 
 console.log('engine.test.mjs: all passed');

@@ -45,3 +45,52 @@ export function pickWeightedSymbol(random = Math.random) {
   }
   return SYMBOLS[SYMBOLS.length - 1].id;
 }
+
+/**
+ * Pick a symbol with ~3× bias toward neighbours already on the board
+ * so matching clusters form much more often.
+ */
+export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random, bias = 3) {
+  const r = Math.floor(index / gridSize);
+  const c = index % gridSize;
+  const neighbourIds = [];
+  const deltas = [
+    [0, -1],
+    [0, 1],
+    [-1, 0],
+    [1, 0],
+  ];
+  for (const [dr, dc] of deltas) {
+    const nr = r + dr;
+    const nc = c + dc;
+    if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) continue;
+    const id = symbols[nr * gridSize + nc];
+    if (id) neighbourIds.push(id);
+  }
+
+  // Also peek one cell below (common cascade neighbour).
+  if (r + 1 < gridSize) {
+    const below = symbols[(r + 1) * gridSize + c];
+    if (below) neighbourIds.push(below);
+  }
+
+  if (!neighbourIds.length) return pickWeightedSymbol(random);
+
+  const boost = new Map();
+  for (const id of neighbourIds) {
+    boost.set(id, (boost.get(id) || 0) + 1);
+  }
+
+  const weights = SYMBOLS.map((s) => {
+    const hits = boost.get(s.id) || 0;
+    // Each neighbouring match multiplies weight by `bias` (~3× more similar drops).
+    return s.weight * (hits > 0 ? bias * hits : 1);
+  });
+  const total = weights.reduce((sum, w) => sum + w, 0);
+  let roll = random() * total;
+  for (let i = 0; i < SYMBOLS.length; i += 1) {
+    roll -= weights[i];
+    if (roll <= 0) return SYMBOLS[i].id;
+  }
+  return SYMBOLS[SYMBOLS.length - 1].id;
+}

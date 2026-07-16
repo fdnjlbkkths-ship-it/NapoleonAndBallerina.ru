@@ -6,7 +6,10 @@
  * Base: reset to all ×2 after a spin. Free spins: sticky.
  */
 
-import { payForCluster, pickWeightedSymbol } from './symbols.js';
+import { payForCluster, pickBiasedSymbol } from './symbols.js';
+
+/** How much more often matching neighbours should drop (~3×). */
+export const MATCH_BIAS = 3;
 
 export const GRID_SIZE = 7;
 export const MIN_CLUSTER = 5;
@@ -100,8 +103,20 @@ export function multTier(value) {
 }
 
 export function fillEmptyCells(state) {
-  for (let i = 0; i < state.symbols.length; i += 1) {
-    if (!state.symbols[i]) state.symbols[i] = pickWeightedSymbol(state.random);
+  // Fill top→bottom so lower neighbours already exist for bias.
+  for (let r = GRID_SIZE - 1; r >= 0; r -= 1) {
+    for (let c = 0; c < GRID_SIZE; c += 1) {
+      const i = idx(r, c);
+      if (!state.symbols[i]) {
+        state.symbols[i] = pickBiasedSymbol(
+          state.symbols,
+          i,
+          GRID_SIZE,
+          state.random,
+          MATCH_BIAS,
+        );
+      }
+    }
   }
 }
 
@@ -239,21 +254,33 @@ export function resolveTumbleStep(state) {
   }
 
   // New pieces drop from the top — listed top→bottom, left→right for sequential anim.
+  // Fill bottom empties first within each column so bias sees pieces below.
   const newDropCells = [];
   for (let c = 0; c < GRID_SIZE; c += 1) {
     let empties = 0;
     for (let r = 0; r < GRID_SIZE; r += 1) {
       if (!state.symbols[idx(r, c)]) empties += 1;
     }
-    let spawn = 0;
+    // Spawn from lowest empty upward so each new piece can match the one under it.
+    const emptyRows = [];
+    for (let r = GRID_SIZE - 1; r >= 0; r -= 1) {
+      if (!state.symbols[idx(r, c)]) emptyRows.push(r);
+    }
+    emptyRows.forEach((r, spawnOrder) => {
+      const i = idx(r, c);
+      state.symbols[i] = pickBiasedSymbol(
+        state.symbols,
+        i,
+        GRID_SIZE,
+        state.random,
+        MATCH_BIAS,
+      );
+      fallDistance[i] = r + 1 + (empties - spawnOrder);
+    });
+    // Animation order: top→bottom within the column (as they visually fall in).
     for (let r = 0; r < GRID_SIZE; r += 1) {
       const i = idx(r, c);
-      if (!state.symbols[i]) {
-        state.symbols[i] = pickWeightedSymbol(state.random);
-        fallDistance[i] = r + 1 + (empties - spawn);
-        newDropCells.push(i);
-        spawn += 1;
-      }
+      if (emptyRows.includes(r)) newDropCells.push(i);
     }
   }
 
