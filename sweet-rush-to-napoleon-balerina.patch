@@ -1,0 +1,4084 @@
+From ce2bb0488b44d0bd955e73969ccd2bdb69176be7 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Thu, 16 Jul 2026 19:36:57 +0000
+Subject: [PATCH] Add Sweet Rush bonus game to the bakery site
+
+Ship the mini-app under /game.html with Vite Pages base, keep
+existing menu/pages intact, and link it from the homepage.
+---
+ game.html                |  196 ++++++
+ index.html               |    3 +-
+ package.json             |    3 +-
+ src/game/engine.js       |  563 ++++++++++++++++
+ src/game/engine.test.mjs |  191 ++++++
+ src/game/game.js         | 1269 ++++++++++++++++++++++++++++++++++++
+ src/game/promo.js        |  102 +++
+ src/game/promo.test.mjs  |   35 +
+ src/game/storage.js      |   72 ++
+ src/game/style.scss      | 1334 ++++++++++++++++++++++++++++++++++++++
+ src/game/symbols.js      |  187 ++++++
+ vite.config.js           |    1 +
+ 12 files changed, 3954 insertions(+), 2 deletions(-)
+ create mode 100644 game.html
+ create mode 100644 src/game/engine.js
+ create mode 100644 src/game/engine.test.mjs
+ create mode 100644 src/game/game.js
+ create mode 100644 src/game/promo.js
+ create mode 100644 src/game/promo.test.mjs
+ create mode 100644 src/game/storage.js
+ create mode 100644 src/game/style.scss
+ create mode 100644 src/game/symbols.js
+
+diff --git a/game.html b/game.html
+new file mode 100644
+index 0000000..f70abc9
+--- /dev/null
++++ b/game.html
+@@ -0,0 +1,196 @@
++<!DOCTYPE html>
++<html lang="ru">
++<head>
++  <meta charset="UTF-8">
++  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
++  <meta name="description" content="Sweet Rush — бонусная игра кондитерской «Наполеон и Балерина». Валюта Вардин, промокоды на скидку.">
++  <meta name="theme-color" content="#2a0f3d">
++  <title>Sweet Rush 1000</title>
++  <link rel="icon" type="image/jpeg" href="images/logo.jpg">
++  <link rel="preconnect" href="https://fonts.googleapis.com">
++  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
++  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
++  <script src="https://telegram.org/js/telegram-web-app.js"></script>
++  <!-- Auto iPhone / Samsung / Android detect before paint -->
++  <script>
++    (function () {
++      try {
++        var ua = navigator.userAgent || '';
++        var tgPlat = (window.Telegram && Telegram.WebApp && Telegram.WebApp.platform) || '';
++        var isIPhone = /iPhone|iPod/i.test(ua);
++        var isAndroidMobile = /Android/i.test(ua) && /Mobile/i.test(ua);
++        var isSamsung = /SamsungBrowser|SM-|Galaxy/i.test(ua);
++        var isTgPhone = /^(ios|android)$/i.test(String(tgPlat));
++        var coarse = window.matchMedia('(pointer: coarse)').matches;
++        var narrow = Math.min(screen.width || 0, screen.height || 0) <= 920;
++        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
++        var phone = isIPhone || isAndroidMobile || isSamsung || isTgPhone || (coarse && narrow);
++        if (phone || reduce) document.documentElement.classList.add('is-phone-opt');
++        if (isIPhone || /^ios$/i.test(String(tgPlat))) document.documentElement.classList.add('is-ios');
++        if (isAndroidMobile || isSamsung || /^android$/i.test(String(tgPlat))) {
++          document.documentElement.classList.add('is-android');
++        }
++      } catch (e) { /* ignore */ }
++    })();
++  </script>
++  <style>
++    html,body{margin:0;min-height:100%;background:#2a0f3d;color:#fff7fb}
++    .splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:radial-gradient(90% 60% at 50% -10%,rgba(255,122,180,.45),transparent 55%),radial-gradient(70% 50% at 100% 40%,rgba(255,200,80,.25),transparent 50%),linear-gradient(180deg,#5b1d6e,#2a0f3d);color:#fff7fb;font-family:Nunito,system-ui,sans-serif}
++    .splash.is-done{pointer-events:none}
++    .splash__inner{width:min(100%,320px);text-align:center}
++    .splash__candy{display:flex;justify-content:center;gap:10px;margin-bottom:18px;font-size:2rem;filter:drop-shadow(0 6px 12px rgba(0,0,0,.35))}
++    .splash__candy span{display:inline-block;animation:splash-bob 1.1s ease-in-out infinite}
++    .splash__candy span:nth-child(2){animation-delay:.12s}
++    .splash__candy span:nth-child(3){animation-delay:.24s}
++    .splash__candy span:nth-child(4){animation-delay:.36s}
++    .splash__candy span:nth-child(5){animation-delay:.48s}
++    @keyframes splash-bob{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-10px) scale(1.08)}}
++    .splash__logo{font-family:Fredoka,Nunito,system-ui,sans-serif;font-weight:700;line-height:1;margin-bottom:8px}
++    .splash__logo-sweet{color:#ffb3d1;font-size:2.4rem;text-shadow:0 3px 0 #c43b6e;margin-right:8px}
++    .splash__logo-rush{color:#ffd45a;font-size:2.4rem;text-shadow:0 3px 0 #c47a10;margin-right:8px}
++    .splash__logo-1k{display:inline-block;font-size:1.1rem;padding:4px 10px;border-radius:999px;vertical-align:middle;background:linear-gradient(180deg,#fff,#ffd45a);color:#5a2a00;box-shadow:0 3px 0 #c47a10}
++    .splash__tag{margin:0 0 22px;opacity:.7;font-size:.9rem}
++    .splash__bar{height:10px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;border:1px solid rgba(255,255,255,.16)}
++    .splash__bar-fill{height:100%;width:12%;border-radius:inherit;background:linear-gradient(90deg,#ff4d8d,#ffd45a 55%,#ff9ae0);box-shadow:0 0 16px rgba(255,77,141,.55);transition:width .25s ease}
++    .splash__pct{margin-top:10px;font-family:Fredoka,Nunito,system-ui,sans-serif;font-size:1.1rem;color:#ffd45a}
++  </style>
++</head>
++<body>
++  <div class="splash" id="splash" role="status" aria-live="polite" aria-label="Загрузка Sweet Rush">
++    <div class="splash__inner">
++      <div class="splash__candy" aria-hidden="true">
++        <span>🥐</span><span>🎂</span><span>🍨</span><span>🧁</span><span>🍭</span>
++      </div>
++      <div class="splash__logo">
++        <span class="splash__logo-sweet">SWEET</span>
++        <span class="splash__logo-rush">RUSH</span>
++        <span class="splash__logo-1k">1000</span>
++      </div>
++      <p class="splash__tag">Готовим сладкий бонус…</p>
++      <div class="splash__bar" aria-hidden="true">
++        <div class="splash__bar-fill" id="splash-bar"></div>
++      </div>
++      <div class="splash__pct" id="splash-pct">0%</div>
++    </div>
++  </div>
++
++  <main class="slot" id="app">
++    <header class="slot__header">
++      <div class="logo">
++        <span class="logo__sweet">SWEET</span>
++        <span class="logo__rush">RUSH</span>
++        <span class="logo__1k">1000</span>
++      </div>
++      <div class="header-right">
++        <button type="button" class="bank-chip" id="btn-wallet" aria-label="Промокоды и баллы">
++          <span class="bank-chip__label">БАЛЛЫ</span>
++          <span class="bank-chip__value" id="stat-bank">0</span>
++        </button>
++        <div class="fs-badge is-hidden" id="fs-badge">
++          <span class="fs-badge__label">FREE SPINS</span>
++          <span class="fs-badge__value" id="stat-spins">0</span>
++        </div>
++      </div>
++    </header>
++
++    <div class="stage">
++      <section class="board-wrap" aria-label="Игровое поле">
++        <div class="board" id="board" role="grid" aria-rowcount="7" aria-colcount="7"></div>
++        <div class="fx-layer" id="fx-layer" aria-hidden="true"></div>
++        <div class="win-banner is-hidden" id="win-banner">
++          <span class="win-banner__tier" id="win-banner-tier"></span>
++          <span id="win-banner-text">0</span>
++          <small>Вардин</small>
++        </div>
++      </section>
++    </div>
++
++    <div class="fs-award is-hidden" id="fs-award" aria-live="assertive">
++      <div class="fs-award__card" id="fs-award-card">
++        <span class="fs-award__emoji" aria-hidden="true">🍭</span>
++        <span class="fs-award__value" id="fs-award-value">+5</span>
++        <span class="fs-award__label">FREE SPINS</span>
++      </div>
++    </div>
++
++    <section class="hud" aria-label="Панель">
++      <div class="hud-bar">
++        <div class="meter">
++          <span class="meter__label">CREDIT</span>
++          <span class="meter__value" id="stat-balance">100 000</span>
++        </div>
++
++        <div class="bet-ctrl">
++          <button type="button" class="bet-ctrl__btn" id="btn-bet-minus" aria-label="Меньше ставка">−</button>
++          <div class="bet-ctrl__info">
++            <span class="bet-ctrl__label">BET</span>
++            <span class="bet-ctrl__value" id="stat-bet">100</span>
++          </div>
++          <button type="button" class="bet-ctrl__btn" id="btn-bet-plus" aria-label="Больше ставка">+</button>
++        </div>
++
++        <button type="button" class="spin-btn" id="btn-spin" aria-label="Крутить">
++          <span class="spin-btn__ring"></span>
++          <span class="spin-btn__label" id="spin-label">SPIN</span>
++        </button>
++
++        <div class="meter meter--win">
++          <span class="meter__label">WIN</span>
++          <span class="meter__value" id="stat-win">0</span>
++        </div>
++      </div>
++
++      <aside class="buy-rail" aria-label="Покупка бонуса">
++        <button type="button" class="buy-btn" id="btn-buy">
++          <span class="buy-btn__title">BUY BONUS</span>
++          <span class="buy-btn__cost" id="buy-cost">100×</span>
++        </button>
++        <button type="button" class="buy-btn buy-btn--super" id="btn-buy-super">
++          <span class="buy-btn__title">SUPER BUY</span>
++          <span class="buy-btn__cost" id="super-cost">500×</span>
++        </button>
++      </aside>
++
++      <p class="hint" id="status">Кластер 5+ · метка → ×2 → ×4… · 🍭3/4/5 = 10/12/15 FS · баллы → промокод</p>
++    </section>
++  </main>
++
++  <div class="toast" id="toast" role="status" aria-live="polite"></div>
++
++  <div class="overlay" id="buy-overlay" role="dialog" aria-modal="true">
++    <div class="overlay__card">
++      <h2 id="buy-overlay-title">Купить бонус</h2>
++      <p id="buy-overlay-text">10 фриспинов с липкими множителями</p>
++      <div class="overlay__price" id="buy-overlay-price">0 Вардин</div>
++      <div class="overlay__actions">
++        <button type="button" class="btn btn--ghost" id="buy-cancel">Отмена</button>
++        <button type="button" class="btn btn--primary" id="buy-confirm">Купить</button>
++      </div>
++    </div>
++  </div>
++
++  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="reward-title">
++    <div class="overlay__card overlay__card--reward">
++      <h2 id="reward-title">Бонус завершён</h2>
++      <p id="reward-sub">Выигрыш зачислен в баллы на скидку в кондитерской</p>
++      <div class="overlay__price" id="overlay-points">0</div>
++      <p class="reward-pity is-hidden" id="reward-pity"></p>
++      <div class="reward-bank-line">
++        Накоплено: <strong id="reward-bank-total">0</strong> баллов
++      </div>
++      <div class="promo-list" id="promo-list" aria-label="Обмен на промокод"></div>
++      <div class="promo-code-box is-hidden" id="promo-code-box">
++        <span class="promo-code-box__label">Ваш промокод</span>
++        <strong class="promo-code-box__code" id="promo-code-value"></strong>
++        <span class="promo-code-box__hint">Покажите при заказе · сохраняется до следующего визита</span>
++        <button type="button" class="btn btn--ghost" id="promo-copy">Скопировать</button>
++      </div>
++      <div class="overlay__actions overlay__actions--stack">
++        <button type="button" class="btn btn--primary" id="overlay-close">Играть дальше</button>
++      </div>
++    </div>
++  </div>
++
++  <script type="module" src="/src/game/game.js"></script>
++</body>
++</html>
+diff --git a/index.html b/index.html
+index 305449f..2431331 100644
+--- a/index.html
++++ b/index.html
+@@ -77,7 +77,7 @@
+           <p class="hero__text" data-hero-animate>Авторские торты и десерты ручной работы — к празднику и просто так.</p>
+           <div class="hero__actions" data-hero-animate>
+             <a href="menu.html" class="btn btn--primary btn--hero">Смотреть меню</a>
+-            <a href="#categories-title" class="btn btn--ghost">Категории</a>
++            <a href="game.html" class="btn btn--ghost">Sweet Rush</a>
+           </div>
+         </div>
+       </div>
+@@ -153,6 +153,7 @@
+           <a href="menu.html" class="footer__link">Меню</a>
+           <a href="about.html" class="footer__link">О нас</a>
+           <a href="contacts.html" class="footer__link">Контакты</a>
++          <a href="game.html" class="footer__link">Sweet Rush</a>
+         </div>
+         <div>
+           <h3 class="footer__title">Контакты</h3>
+diff --git a/package.json b/package.json
+index 91e25cd..1a81a9f 100644
+--- a/package.json
++++ b/package.json
+@@ -7,7 +7,8 @@
+     "dev": "vite",
+     "admin": "vite",
+     "build": "vite build",
+-    "preview": "vite preview"
++    "preview": "vite preview",
++    "test:game": "node src/game/engine.test.mjs && node src/game/promo.test.mjs"
+   },
+   "devDependencies": {
+     "playwright": "^1.61.1",
+diff --git a/src/game/engine.js b/src/game/engine.js
+new file mode 100644
+index 0000000..e3605a8
+--- /dev/null
++++ b/src/game/engine.js
+@@ -0,0 +1,563 @@
++/**
++ * Sugar Rush 1000–style engine (demo, currency: Вардин 1:1 ₽).
++ *
++ * Sticky multiplier spots (stay on the cell, corner badge in UI):
++ * 1) first explode on a cell → mark
++ * 2) second explode → ×2
++ * 3) further explodes → ×4 … ×1024
++ * Spots do not move with falling symbols.
++ * Base: marks reset after each spin. Free spins: sticky.
++ * Super Free Spins: every cell starts at ×2.
++ */
++
++import {
++  payForCluster,
++  pickBiasedSymbol,
++  createDropMood,
++  isScatter,
++  countScatters,
++} from './symbols.js';
++
++/** Baseline neighbour match bias (moods jitter around this). */
++export const MATCH_BIAS = 3.25;
++
++function shuffleInPlace(list, random) {
++  for (let i = list.length - 1; i > 0; i -= 1) {
++    const j = Math.floor(random() * (i + 1));
++    const tmp = list[i];
++    list[i] = list[j];
++    list[j] = tmp;
++  }
++  return list;
++}
++
++export const GRID_SIZE = 7;
++export const MIN_CLUSTER = 5;
++export const FREE_SPINS_START = 10;
++export const FREE_SPINS_RETRIGGER = 5;
++export const SCATTER_RETRIGGER_NEED = 3;
++export const CURRENCY = 'Вардин';
++export const START_BALANCE = 100_000;
++export const BET_STEPS = [10, 20, 40, 50, 80, 100, 200, 400, 500, 1000];
++export const BUY_BONUS_COST_MULT = 100;
++export const BUY_SUPER_COST_MULT = 500;
++export const MULT_LADDER = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024];
++
++const DIRS = [
++  [0, 1],
++  [1, 0],
++  [0, -1],
++  [-1, 0],
++];
++
++function idx(r, c) {
++  return r * GRID_SIZE + c;
++}
++
++function inBounds(r, c) {
++  return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
++}
++
++function createEmptyGrid(fill = null) {
++  return Array.from({ length: GRID_SIZE * GRID_SIZE }, () => fill);
++}
++
++export function nextMultiplier(current) {
++  if (!current || current <= 0) return MULT_LADDER[0];
++  const i = MULT_LADDER.indexOf(current);
++  if (i === -1) return Math.min(current * 2, MULT_LADDER.at(-1));
++  return MULT_LADDER[Math.min(i + 1, MULT_LADDER.length - 1)];
++}
++
++/** Concentric Super Free Spins preload (centre ×16 → edges ×2). */
++export function buildSuperMultiplierGrid() {
++  const center = (GRID_SIZE - 1) / 2;
++  const grid = createEmptyGrid(0);
++  for (let r = 0; r < GRID_SIZE; r += 1) {
++    for (let c = 0; c < GRID_SIZE; c += 1) {
++      const dist = Math.max(Math.abs(r - center), Math.abs(c - center));
++      let m = 2;
++      if (dist === 0) m = 16;
++      else if (dist === 1) m = 8;
++      else if (dist === 2) m = 4;
++      grid[idx(r, c)] = m;
++    }
++  }
++  return grid;
++}
++
++export function fillAllMultipliers(value = 2) {
++  return createEmptyGrid(value);
++}
++
++export function freeSpinsForScatters(count) {
++  if (count >= 7) return 30;
++  if (count >= 6) return 20;
++  if (count >= 5) return 15;
++  if (count >= 4) return 12;
++  if (count >= 3) return 10;
++  return 0;
++}
++
++export function createGameState(seedRandom = Math.random) {
++  return {
++    symbols: createEmptyGrid(null),
++    multipliers: createEmptyGrid(0),
++    marks: createEmptyGrid(false),
++    balance: START_BALANCE,
++    bet: 100,
++    betIndex: BET_STEPS.indexOf(100),
++    lastWin: 0,
++    totalBonusWin: 0,
++    mode: 'base', // base | bonus | super
++    spinsLeft: 0,
++    busy: false,
++    finishedBonus: false,
++    random: seedRandom,
++  };
++}
++
++/** CSS tier key for multiplier colour (×2 … ×1024). */
++export function multTier(value) {
++  const v = value || 2;
++  if (v >= 1024) return 1024;
++  if (v >= 512) return 512;
++  if (v >= 256) return 256;
++  if (v >= 128) return 128;
++  if (v >= 64) return 64;
++  if (v >= 32) return 32;
++  if (v >= 16) return 16;
++  if (v >= 8) return 8;
++  if (v >= 4) return 4;
++  return 2;
++}
++
++export function fillEmptyCells(state) {
++  const mood = createDropMood(state.random);
++  // Shuffle column order so openings aren't left-to-right scripted.
++  const cols = shuffleInPlace(
++    Array.from({ length: GRID_SIZE }, (_, c) => c),
++    state.random,
++  );
++  // Fill bottom→top so lower neighbours already exist for bias.
++  for (let r = GRID_SIZE - 1; r >= 0; r -= 1) {
++    for (const c of cols) {
++      const i = idx(r, c);
++      if (!state.symbols[i]) {
++        state.symbols[i] = pickBiasedSymbol(
++          state.symbols,
++          i,
++          GRID_SIZE,
++          state.random,
++          mood,
++        );
++      }
++    }
++  }
++  return mood;
++}
++
++export function findClusters(symbols) {
++  const visited = new Array(symbols.length).fill(false);
++  const clusters = [];
++
++  for (let start = 0; start < symbols.length; start += 1) {
++    const id = symbols[start];
++    if (!id || visited[start] || isScatter(id)) continue;
++
++    const queue = [start];
++    const cells = [];
++    visited[start] = true;
++
++    while (queue.length) {
++      const cur = queue.pop();
++      cells.push(cur);
++      const r = Math.floor(cur / GRID_SIZE);
++      const c = cur % GRID_SIZE;
++
++      for (const [dr, dc] of DIRS) {
++        const nr = r + dr;
++        const nc = c + dc;
++        if (!inBounds(nr, nc)) continue;
++        const ni = idx(nr, nc);
++        if (visited[ni] || symbols[ni] !== id) continue;
++        visited[ni] = true;
++        queue.push(ni);
++      }
++    }
++
++    if (cells.length >= MIN_CLUSTER) {
++      clusters.push({ symbolId: id, cells });
++    }
++  }
++
++  return clusters;
++}
++
++/**
++ * Sticky spots: mark → ×2 → ×4 → … → ×1024 on each explode.
++ * Values stay on the same grid cell (UI keeps the badge in the corner).
++ */
++export function applyExplodeMarks(state, winningCells) {
++  const upgrades = [];
++  const unique = [...new Set(winningCells)];
++
++  for (const cell of unique) {
++    const before = {
++      marked: Boolean(state.marks[cell]),
++      mult: state.multipliers[cell] || 0,
++    };
++
++    if (state.multipliers[cell] > 0) {
++      state.multipliers[cell] = nextMultiplier(state.multipliers[cell]);
++      state.marks[cell] = true;
++    } else if (state.marks[cell]) {
++      state.multipliers[cell] = MULT_LADDER[0];
++    } else {
++      state.marks[cell] = true;
++    }
++
++    upgrades.push({
++      cell,
++      before,
++      after: {
++        marked: Boolean(state.marks[cell]),
++        mult: state.multipliers[cell] || 0,
++      },
++    });
++  }
++
++  return upgrades;
++}
++
++function applyGravityWithFalls(symbols) {
++  const fallDistance = createEmptyGrid(0);
++  const moves = []; // { from, to, id, rows }
++
++  for (let c = 0; c < GRID_SIZE; c += 1) {
++    const stack = [];
++    for (let r = GRID_SIZE - 1; r >= 0; r -= 1) {
++      const i = idx(r, c);
++      if (symbols[i]) stack.push({ id: symbols[i], fromR: r });
++    }
++    let writeR = GRID_SIZE - 1;
++    for (const item of stack) {
++      const to = idx(writeR, c);
++      const from = idx(item.fromR, c);
++      symbols[to] = item.id;
++      const rows = writeR - item.fromR;
++      fallDistance[to] = rows;
++      if (rows > 0) {
++        moves.push({ from, to, id: item.id, rows });
++      }
++      writeR -= 1;
++    }
++    while (writeR >= 0) {
++      const to = idx(writeR, c);
++      symbols[to] = null;
++      fallDistance[to] = 0;
++      writeR -= 1;
++    }
++  }
++
++  return { fallDistance, moves };
++}
++
++export function resolveTumbleStep(state) {
++  const clusters = findClusters(state.symbols);
++  if (!clusters.length) return null;
++
++  const symbolsBefore = [...state.symbols];
++  const multipliersBefore = [...state.multipliers];
++  const marksBefore = [...state.marks];
++
++  let stepWin = 0;
++  const winningCells = [];
++  const clusterDetails = [];
++
++  for (const cluster of clusters) {
++    const base = payForCluster(cluster.symbolId, cluster.cells.length);
++    let multSum = 0;
++    for (const cell of cluster.cells) {
++      multSum += state.multipliers[cell] || 0;
++      winningCells.push(cell);
++    }
++    const applied = Math.max(1, multSum);
++    const win = +(base * state.bet * applied).toFixed(2);
++    stepWin += win;
++    clusterDetails.push({
++      symbolId: cluster.symbolId,
++      size: cluster.cells.length,
++      cells: [...cluster.cells],
++      base,
++      multSum: applied,
++      win,
++    });
++  }
++
++  const uniqueWins = [...new Set(winningCells)];
++  for (const cell of uniqueWins) state.symbols[cell] = null;
++
++  // Upgrade sticky spots on exploded cells (badges stay on that cell).
++  const upgrades = applyExplodeMarks(state, uniqueWins);
++  const symbolsAfterExplode = [...state.symbols];
++
++  const { fallDistance, moves } = applyGravityWithFalls(state.symbols);
++  const symbolsAfterGravity = [...state.symbols];
++  const slideCells = moves.map((m) => m.to);
++
++  // New pieces drop from the top — listed top→bottom for sequential anim.
++  // Fresh mood each cascade wave so tumbles don't feel copy-pasted.
++  const dropMood = createDropMood(state.random);
++  const newDropCells = [];
++  const cols = shuffleInPlace(
++    Array.from({ length: GRID_SIZE }, (_, c) => c),
++    state.random,
++  );
++  for (const c of cols) {
++    let empties = 0;
++    for (let r = 0; r < GRID_SIZE; r += 1) {
++      if (!state.symbols[idx(r, c)]) empties += 1;
++    }
++    // Spawn from lowest empty upward so each new piece can match the one under it.
++    const emptyRows = [];
++    for (let r = GRID_SIZE - 1; r >= 0; r -= 1) {
++      if (!state.symbols[idx(r, c)]) emptyRows.push(r);
++    }
++    emptyRows.forEach((r, spawnOrder) => {
++      const i = idx(r, c);
++      state.symbols[i] = pickBiasedSymbol(
++        state.symbols,
++        i,
++        GRID_SIZE,
++        state.random,
++        dropMood,
++      );
++      fallDistance[i] = r + 1 + (empties - spawnOrder);
++    });
++  }
++  // Animation order stays left→right, top→bottom (visual cascade path).
++  for (let c = 0; c < GRID_SIZE; c += 1) {
++    for (let r = 0; r < GRID_SIZE; r += 1) {
++      const i = idx(r, c);
++      if (!symbolsAfterGravity[i] && state.symbols[i]) newDropCells.push(i);
++    }
++  }
++
++  return {
++    clusters: clusterDetails,
++    winningCells: uniqueWins,
++    stepWin: +stepWin.toFixed(2),
++    upgrades,
++    fallDistance: [...fallDistance],
++    moves,
++    slideCells,
++    newDropCells,
++    symbolsAfterExplode,
++    symbolsAfterGravity,
++    symbolsBefore,
++    multipliersBefore,
++    marksBefore,
++    symbolsAfter: [...state.symbols],
++    multipliersAfter: [...state.multipliers],
++    marksAfter: [...state.marks],
++  };
++}
++
++function resetMarksIfBase(state) {
++  if (state.mode === 'base') {
++    state.marks = createEmptyGrid(false);
++    state.multipliers = createEmptyGrid(0);
++  }
++}
++
++function runCascades(state) {
++  const steps = [];
++  let spinWin = 0;
++  let guard = 0;
++  let maxScatters = countScatters(state.symbols);
++  while (guard < 48) {
++    const step = resolveTumbleStep(state);
++    if (!step) break;
++    steps.push(step);
++    spinWin += step.stepWin;
++    maxScatters = Math.max(maxScatters, countScatters(step.symbolsAfter));
++    guard += 1;
++  }
++  maxScatters = Math.max(maxScatters, countScatters(state.symbols));
++  return { steps, spinWin: +spinWin.toFixed(2), scatterCount: maxScatters };
++}
++
++export function canAfford(state, amount) {
++  return state.balance + 1e-9 >= amount;
++}
++
++export function changeBet(state, dir) {
++  const next = Math.max(0, Math.min(BET_STEPS.length - 1, state.betIndex + dir));
++  state.betIndex = next;
++  state.bet = BET_STEPS[next];
++  return state.bet;
++}
++
++export function playBaseSpin(state) {
++  if (state.mode !== 'base' || state.busy) {
++    return { ok: false, reason: 'busy' };
++  }
++  if (!canAfford(state, state.bet)) {
++    return { ok: false, reason: 'funds' };
++  }
++
++  state.balance = +(state.balance - state.bet).toFixed(2);
++  state.lastWin = 0;
++  resetMarksIfBase(state);
++
++  state.symbols = createEmptyGrid(null);
++  fillEmptyCells(state);
++
++  const opening = {
++    symbols: [...state.symbols],
++    multipliers: [...state.multipliers],
++    marks: [...state.marks],
++  };
++
++  const { steps, spinWin, scatterCount } = runCascades(state);
++  state.lastWin = spinWin;
++  state.balance = +(state.balance + spinWin).toFixed(2);
++
++  // 3+ scatters in base → Free Spins (10–30 like Sugar Rush 1000).
++  let triggeredBonus = false;
++  let awardedSpins = 0;
++  if (scatterCount >= SCATTER_RETRIGGER_NEED) {
++    awardedSpins = freeSpinsForScatters(scatterCount);
++    startBonus(state, { superBonus: false, spins: awardedSpins });
++    triggeredBonus = true;
++  } else {
++    resetMarksIfBase(state);
++  }
++
++  return {
++    ok: true,
++    opening,
++    steps,
++    spinWin,
++    scatterCount,
++    triggeredBonus,
++    awardedSpins,
++    balance: state.balance,
++    multipliers: [...state.multipliers],
++    marks: [...state.marks],
++    symbols: [...state.symbols],
++  };
++}
++
++function startBonus(state, { superBonus = false, spins = FREE_SPINS_START } = {}) {
++  state.mode = superBonus ? 'super' : 'bonus';
++  state.spinsLeft = spins;
++  state.totalBonusWin = 0;
++  state.finishedBonus = false;
++  state.lastWin = 0;
++
++  if (superBonus) {
++    // Super Free Spins: every cell preloaded with ×2 (sticky).
++    state.multipliers = fillAllMultipliers(2);
++    state.marks = createEmptyGrid(true);
++  } else {
++    // Regular Free Spins: clean sticky spots (build during the round).
++    state.multipliers = createEmptyGrid(0);
++    state.marks = createEmptyGrid(false);
++  }
++
++  state.symbols = createEmptyGrid(null);
++  fillEmptyCells(state);
++}
++
++export function buyBonus(state, { superBonus = false } = {}) {
++  if (state.mode !== 'base' || state.busy) {
++    return { ok: false, reason: 'busy' };
++  }
++  const costMult = superBonus ? BUY_SUPER_COST_MULT : BUY_BONUS_COST_MULT;
++  const cost = state.bet * costMult;
++  if (!canAfford(state, cost)) {
++    return { ok: false, reason: 'funds', cost };
++  }
++
++  state.balance = +(state.balance - cost).toFixed(2);
++  startBonus(state, { superBonus });
++
++  return {
++    ok: true,
++    cost,
++    mode: state.mode,
++    spinsLeft: state.spinsLeft,
++    balance: state.balance,
++    symbols: [...state.symbols],
++    multipliers: [...state.multipliers],
++    marks: [...state.marks],
++  };
++}
++
++export function playFreeSpin(state) {
++  if ((state.mode !== 'bonus' && state.mode !== 'super') || state.spinsLeft <= 0) {
++    return { ok: false, done: true };
++  }
++
++  state.spinsLeft -= 1;
++  state.symbols = createEmptyGrid(null);
++  fillEmptyCells(state);
++
++  const opening = {
++    symbols: [...state.symbols],
++    multipliers: [...state.multipliers],
++    marks: [...state.marks],
++  };
++
++  const { steps, spinWin, scatterCount } = runCascades(state);
++  state.lastWin = spinWin;
++  state.totalBonusWin = +(state.totalBonusWin + spinWin).toFixed(2);
++  state.balance = +(state.balance + spinWin).toFixed(2);
++
++  // 3 Free Spin symbols in one spin → +5 spins
++  let retrigger = 0;
++  if (scatterCount >= SCATTER_RETRIGGER_NEED) {
++    retrigger = FREE_SPINS_RETRIGGER;
++    state.spinsLeft += retrigger;
++  }
++
++  const done = state.spinsLeft <= 0;
++  if (done) {
++    state.finishedBonus = true;
++    state.mode = 'base';
++    state.marks = createEmptyGrid(false);
++    state.multipliers = createEmptyGrid(0);
++  }
++
++  return {
++    ok: true,
++    opening,
++    steps,
++    spinWin,
++    scatterCount,
++    retrigger,
++    spinsLeft: state.spinsLeft,
++    totalBonusWin: state.totalBonusWin,
++    balance: state.balance,
++    multipliers: [...state.multipliers],
++    marks: [...state.marks],
++    symbols: [...state.symbols],
++    done,
++  };
++}
++
++export function formatVardin(n) {
++  return `${n.toLocaleString('ru-RU', {
++    minimumFractionDigits: 0,
++    maximumFractionDigits: 2,
++  })} ${CURRENCY}`;
++}
++
++export function formatVardinShort(n) {
++  return n.toLocaleString('ru-RU', {
++    minimumFractionDigits: 0,
++    maximumFractionDigits: 2,
++  });
++}
+diff --git a/src/game/engine.test.mjs b/src/game/engine.test.mjs
+new file mode 100644
+index 0000000..b76bb51
+--- /dev/null
++++ b/src/game/engine.test.mjs
+@@ -0,0 +1,191 @@
++import assert from 'node:assert/strict';
++import {
++  GRID_SIZE,
++  MIN_CLUSTER,
++  MULT_LADDER,
++  MATCH_BIAS,
++  createGameState,
++  fillEmptyCells,
++  findClusters,
++  applyExplodeMarks,
++  resolveTumbleStep,
++  playBaseSpin,
++  buyBonus,
++  playFreeSpin,
++  nextMultiplier,
++  multTier,
++  freeSpinsForScatters,
++} from './engine.js';
++import {
++  pickBiasedSymbol,
++  createDropMood,
++  countScatters,
++  SCATTER_ID,
++  isScatter,
++} from './symbols.js';
++
++function seeded(seed = 1) {
++  let s = seed;
++  return () => {
++    s = (s * 16807) % 2147483647;
++    return (s - 1) / 2147483646;
++  };
++}
++
++{
++  const symbols = Array(GRID_SIZE * GRID_SIZE).fill('cake');
++  assert.equal(findClusters(symbols).length, 1);
++}
++
++{
++  const symbols = Array(GRID_SIZE * GRID_SIZE).fill(null);
++  for (let i = 0; i < MIN_CLUSTER - 1; i += 1) symbols[i] = 'eclair';
++  assert.equal(findClusters(symbols).length, 0);
++}
++
++// Sticky ladder on the same cell: mark → ×2 → ×4 → ×8
++{
++  const state = createGameState(seeded(1));
++  const cell = 10;
++  assert.equal(state.multipliers[cell], 0);
++
++  applyExplodeMarks(state, [cell]);
++  assert.equal(state.marks[cell], true);
++  assert.equal(state.multipliers[cell], 0);
++
++  applyExplodeMarks(state, [cell]);
++  assert.equal(state.multipliers[cell], 2);
++
++  applyExplodeMarks(state, [cell]);
++  assert.equal(state.multipliers[cell], 4);
++
++  applyExplodeMarks(state, [cell]);
++  assert.equal(state.multipliers[cell], 8);
++}
++
++{
++  assert.equal(nextMultiplier(512), 1024);
++  assert.equal(nextMultiplier(1024), 1024);
++  assert.equal(MULT_LADDER.at(-1), 1024);
++  assert.equal(multTier(2), 2);
++  assert.equal(freeSpinsForScatters(3), 10);
++  assert.equal(freeSpinsForScatters(5), 15);
++  assert.equal(freeSpinsForScatters(7), 30);
++}
++
++{
++  const state = createGameState(seeded(21));
++  state.bet = 100;
++  const bought = buyBonus(state, { superBonus: true });
++  assert.equal(bought.ok, true);
++  assert.equal(state.mode, 'super');
++  assert.ok(state.multipliers.every((m) => m === 2));
++}
++
++{
++  const state = createGameState(seeded(22));
++  state.bet = 100;
++  const bought = buyBonus(state, { superBonus: false });
++  assert.equal(bought.ok, true);
++  assert.equal(state.mode, 'bonus');
++  assert.ok(state.multipliers.every((m) => m === 0));
++  assert.ok(state.marks.every((m) => m === false));
++}
++
++{
++  const state = createGameState(seeded(99));
++  state.symbols = Array(GRID_SIZE * GRID_SIZE).fill('berry');
++  state.multipliers[0] = 8;
++  state.marks[0] = true;
++  const step = resolveTumbleStep(state);
++  assert.ok(step);
++  assert.ok(step.stepWin > 0);
++  // Cell 0 upgrades in place ×8 → ×16; other wins start as marks
++  assert.equal(step.multipliersAfter[0], 16);
++  assert.equal(step.marksAfter[0], true);
++  for (const cell of step.winningCells) {
++    if (cell === 0) continue;
++    assert.equal(step.multipliersAfter[cell], 0);
++    assert.equal(step.marksAfter[cell], true);
++  }
++}
++
++{
++  const state = createGameState(seeded(3));
++  fillEmptyCells(state);
++  const spin = playBaseSpin(state);
++  assert.equal(spin.ok, true);
++  if (!spin.triggeredBonus) {
++    assert.ok(state.multipliers.every((m) => m === 0));
++  }
++}
++
++{
++  const state = createGameState(seeded(11));
++  state.bet = 100;
++  buyBonus(state, { superBonus: false });
++  state.multipliers[0] = 8;
++  state.marks[0] = true;
++  const fs = playFreeSpin(state);
++  assert.equal(fs.ok, true);
++  assert.equal(state.mode, 'bonus');
++  assert.ok(state.multipliers[0] >= 8);
++}
++
++{
++  assert.ok(MATCH_BIAS >= 3);
++  const board = Array(GRID_SIZE * GRID_SIZE).fill(null);
++  board[1] = 'cake';
++  let cake = 0;
++  const n = 2000;
++  for (let i = 0; i < n; i += 1) {
++    if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, 3) === 'cake') cake += 1;
++  }
++  assert.ok(cake / n > 0.22, `expected frequent cake matches, got ${cake / n}`);
++}
++
++{
++  const mood = createDropMood(seeded(42));
++  assert.ok(mood.bias >= 1);
++  assert.ok(mood.chaosRate >= 0 && mood.chaosRate < 1);
++  assert.ok(mood.scatterBoost >= 1);
++
++  // High chaos + no lucky → more non-neighbour variety than tight bias
++  const board = Array(GRID_SIZE * GRID_SIZE).fill(null);
++  board[1] = 'cake';
++  const chaosMood = { bias: 1.5, chaosRate: 0.9, luckyId: null, luckyBoost: 1, scatterBoost: 1 };
++  const tightMood = { bias: 6, chaosRate: 0, luckyId: null, luckyBoost: 1, scatterBoost: 1 };
++  let chaosCake = 0;
++  let tightCake = 0;
++  const n = 1500;
++  for (let i = 0; i < n; i += 1) {
++    if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, chaosMood) === 'cake') chaosCake += 1;
++    if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, tightMood) === 'cake') tightCake += 1;
++  }
++  assert.ok(
++    tightCake > chaosCake,
++    `tight bias should beat chaos (${tightCake} vs ${chaosCake})`,
++  );
++}
++
++{
++  // Different seeds should diverge board composition (randomness smoke test)
++  const a = createGameState(seeded(7));
++  const b = createGameState(seeded(8));
++  fillEmptyCells(a);
++  fillEmptyCells(b);
++  const same = a.symbols.every((id, i) => id === b.symbols[i]);
++  assert.equal(same, false);
++}
++
++{
++  assert.equal(isScatter(SCATTER_ID), true);
++  const board = Array(GRID_SIZE * GRID_SIZE).fill('cake');
++  board[0] = SCATTER_ID;
++  board[3] = SCATTER_ID;
++  board[8] = SCATTER_ID;
++  assert.equal(countScatters(board), 3);
++  assert.equal(findClusters(board).every((c) => c.symbolId !== SCATTER_ID), true);
++}
++
++console.log('engine.test.mjs: all passed');
+diff --git a/src/game/game.js b/src/game/game.js
+new file mode 100644
+index 0000000..3391674
+--- /dev/null
++++ b/src/game/game.js
+@@ -0,0 +1,1269 @@
++import gsap from 'gsap';
++import {
++  GRID_SIZE,
++  BUY_BONUS_COST_MULT,
++  BUY_SUPER_COST_MULT,
++  BET_STEPS,
++  START_BALANCE,
++  createGameState,
++  fillEmptyCells,
++  playBaseSpin,
++  playFreeSpin,
++  buyBonus,
++  changeBet,
++  formatVardin,
++  formatVardinShort,
++  multTier,
++} from './engine.js';
++import { SYMBOL_BY_ID, isScatter } from './symbols.js';
++import {
++  PROMO_TIERS,
++  MIN_BONUS_ROUND_POINTS,
++  applyBonusPity,
++  redeemPromo,
++} from './promo.js';
++import {
++  loadUserCache,
++  persistProgress,
++  getTelegramUserName,
++} from './storage.js';
++import './style.scss';
++
++const tg = window.Telegram?.WebApp;
++
++/** Auto-detect iPhone / Samsung / Android / Telegram mobile and tune FX. */
++function detectPerfProfile() {
++  const ua = navigator.userAgent || '';
++  const platform = navigator.platform || '';
++  const tgPlatform = String(tg?.platform || '').toLowerCase();
++
++  const isIPhone = /iPhone|iPod/i.test(ua);
++  const isIPad =
++    /iPad/i.test(ua) || (platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
++  const isIOS = isIPhone || isIPad || /iOS|CriOS|FxiOS/i.test(ua) || tgPlatform === 'ios';
++  const isAndroid = /Android/i.test(ua) || tgPlatform === 'android';
++  const isSamsung = /SamsungBrowser|SM-|GT-|Galaxy/i.test(ua);
++  const isMobileUA = /Mobile|Android|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
++  const coarse = window.matchMedia('(pointer: coarse)').matches;
++  const narrow = window.matchMedia('(max-width: 920px)').matches;
++  const shortScreen = Math.min(screen.width || 9999, screen.height || 9999) <= 920;
++  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
++  const saveData = Boolean(navigator.connection?.saveData);
++  const lowMem =
++    typeof navigator.deviceMemory === 'number' && navigator.deviceMemory > 0 && navigator.deviceMemory <= 4;
++  const lowCpu =
++    typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
++
++  const isPhone =
++    isIPhone ||
++    isSamsung ||
++    (isAndroid && isMobileUA) ||
++    tgPlatform === 'ios' ||
++    tgPlatform === 'android' ||
++    (coarse && narrow && (isMobileUA || shortScreen));
++
++  const lite = reduce || isPhone || saveData || (coarse && (lowMem || lowCpu));
++
++  return {
++    isIPhone,
++    isIOS,
++    isAndroid,
++    isSamsung,
++    isPhone,
++    lite,
++    reduce,
++    saveData,
++  };
++}
++
++const perf = detectPerfProfile();
++const reduceMotion = perf.reduce;
++/** Lighter cascade/FX path — enabled automatically on phones. */
++const liteFx = perf.lite;
++
++(function applyPerfMode() {
++  const root = document.documentElement;
++  if (perf.lite || perf.isPhone) root.classList.add('is-phone-opt');
++  if (perf.isIOS) root.classList.add('is-ios');
++  if (perf.isAndroid || perf.isSamsung) root.classList.add('is-android');
++  if (perf.isSamsung) root.classList.add('is-samsung');
++  if (perf.lite) root.classList.add('is-lite-fx');
++
++  // Snappier tweens on phones; less work for the main thread.
++  gsap.ticker.lagSmoothing(500, 33);
++  if (liteFx) {
++    gsap.defaults({
++      ease: 'power2.out',
++      overwrite: 'auto',
++    });
++  }
++})();
++
++const els = {
++  board: document.getElementById('board'),
++  fx: document.getElementById('fx-layer'),
++  spins: document.getElementById('stat-spins'),
++  fsBadge: document.getElementById('fs-badge'),
++  balance: document.getElementById('stat-balance'),
++  win: document.getElementById('stat-win'),
++  bet: document.getElementById('stat-bet'),
++  bank: document.getElementById('stat-bank'),
++  walletBtn: document.getElementById('btn-wallet'),
++  spinBtn: document.getElementById('btn-spin'),
++  spinLabel: document.getElementById('spin-label'),
++  betMinus: document.getElementById('btn-bet-minus'),
++  betPlus: document.getElementById('btn-bet-plus'),
++  buyBtn: document.getElementById('btn-buy'),
++  buySuperBtn: document.getElementById('btn-buy-super'),
++  buyCost: document.getElementById('buy-cost'),
++  superCost: document.getElementById('super-cost'),
++  toast: document.getElementById('toast'),
++  status: document.getElementById('status'),
++  winBanner: document.getElementById('win-banner'),
++  winBannerText: document.getElementById('win-banner-text'),
++  fsAward: document.getElementById('fs-award'),
++  fsAwardCard: document.getElementById('fs-award-card'),
++  fsAwardValue: document.getElementById('fs-award-value'),
++  overlay: document.getElementById('overlay'),
++  overlayPoints: document.getElementById('overlay-points'),
++  overlayClose: document.getElementById('overlay-close'),
++  rewardSub: document.getElementById('reward-sub'),
++  rewardPity: document.getElementById('reward-pity'),
++  rewardBankTotal: document.getElementById('reward-bank-total'),
++  promoList: document.getElementById('promo-list'),
++  promoCodeBox: document.getElementById('promo-code-box'),
++  promoCodeValue: document.getElementById('promo-code-value'),
++  promoCopy: document.getElementById('promo-copy'),
++  buyOverlay: document.getElementById('buy-overlay'),
++  buyOverlayTitle: document.getElementById('buy-overlay-title'),
++  buyOverlayText: document.getElementById('buy-overlay-text'),
++  buyOverlayPrice: document.getElementById('buy-overlay-price'),
++  buyCancel: document.getElementById('buy-cancel'),
++  buyConfirm: document.getElementById('buy-confirm'),
++};
++
++let state = createGameState();
++let rewardBank = 0;
++let promoCodes = [];
++let cellNodes = [];
++let animating = false;
++let pendingBuy = null; // 'bonus' | 'super'
++let lastIssuedCode = '';
++
++function saveCache() {
++  persistProgress({
++    rewardBank,
++    balance: state.balance,
++    betIndex: state.betIndex,
++    codes: promoCodes,
++  });
++}
++
++function restoreFromCache() {
++  const cache = loadUserCache();
++  rewardBank = Number(cache.rewardBank) || 0;
++  promoCodes = Array.isArray(cache.codes) ? cache.codes : [];
++  if (cache.balance != null && Number.isFinite(Number(cache.balance))) {
++    state.balance = Number(cache.balance);
++  } else {
++    state.balance = START_BALANCE;
++  }
++  if (cache.betIndex != null && BET_STEPS[cache.betIndex] != null) {
++    state.betIndex = cache.betIndex;
++    state.bet = BET_STEPS[cache.betIndex];
++  }
++}
++
++function initTelegram() {
++  if (!tg) return;
++  tg.ready();
++  tg.expand();
++  try {
++    tg.setHeaderColor('#1a0f2e');
++    tg.setBackgroundColor('#140a24');
++  } catch {
++    /* older clients */
++  }
++}
++
++function cellSize() {
++  const first = cellNodes[0]?.el;
++  return first ? first.getBoundingClientRect().height + 4 : 48;
++}
++
++function clearSymbolClass(el) {
++  [...el.classList]
++    .filter((cls) => cls.startsWith('sym-'))
++    .forEach((cls) => el.classList.remove(cls));
++}
++
++function buildBoard() {
++  els.board.innerHTML = '';
++  cellNodes = [];
++  for (let i = 0; i < GRID_SIZE * GRID_SIZE; i += 1) {
++    const cell = document.createElement('div');
++    cell.className = 'cell';
++    cell.innerHTML = `
++      <div class="cell__tile" aria-hidden="true"></div>
++      <span class="cell__mark-dot" aria-hidden="true"></span>
++      <span class="cell__mult" aria-hidden="true"></span>
++      <span class="cell__glyph" aria-hidden="true"></span>
++    `;
++    els.board.appendChild(cell);
++    cellNodes.push({
++      el: cell,
++      tile: cell.querySelector('.cell__tile'),
++      glyph: cell.querySelector('.cell__glyph'),
++      mult: cell.querySelector('.cell__mult'),
++      mark: cell.querySelector('.cell__mark-dot'),
++    });
++  }
++}
++
++function clearMultTier(el) {
++  [...el.classList]
++    .filter((cls) => cls.startsWith('mult-tier-'))
++    .forEach((cls) => el.classList.remove(cls));
++}
++
++function paintBoard(symbols, multipliers, marks, winning = []) {
++  const winSet = new Set(winning);
++  for (let i = 0; i < cellNodes.length; i += 1) {
++    const node = cellNodes[i];
++    const id = symbols[i];
++    const symbol = SYMBOL_BY_ID[id];
++
++    clearSymbolClass(node.el);
++    clearSymbolClass(node.tile);
++
++    if (symbol) {
++      node.el.classList.add(`sym-${symbol.id}`);
++      node.tile.classList.add(`sym-${symbol.id}`, 'is-filled');
++      node.glyph.textContent = symbol.glyph;
++      node.glyph.classList.add('is-on');
++      node.tile.style.setProperty('--sym-tint', symbol.tint);
++      node.tile.style.setProperty('--sym-deep', symbol.deep);
++    } else {
++      node.tile.classList.remove('is-filled');
++      node.glyph.classList.remove('is-on');
++      node.glyph.textContent = '';
++      node.tile.style.removeProperty('--sym-tint');
++      node.tile.style.removeProperty('--sym-deep');
++    }
++
++    node.el.classList.toggle('is-win', winSet.has(i));
++    node.el.classList.toggle('is-scatter', isScatter(id));
++    node.el.classList.toggle('is-empty', !symbol);
++
++    const m = multipliers[i] || 0;
++    const marked = Boolean(marks[i]);
++    node.el.classList.toggle('is-marked', marked || m > 0);
++
++    clearMultTier(node.mult);
++    clearMultTier(node.el);
++
++    if (m > 0) {
++      node.mult.textContent = `×${m}`;
++      node.mult.classList.add('is-on');
++      node.mark.classList.remove('is-on');
++      const tier = multTier(m);
++      node.mult.classList.add(`mult-tier-${tier}`);
++      node.el.classList.add(`mult-tier-${tier}`);
++    } else {
++      node.mult.textContent = '';
++      node.mult.classList.remove('is-on');
++      node.mark.classList.toggle('is-on', marked);
++    }
++
++    gsap.set(node.tile, { clearProps: 'transform,filter,opacity' });
++    gsap.set(node.glyph, { clearProps: 'transform,filter,opacity' });
++    // Do not clear left/top/right/bottom — badge must stay in the corner
++    gsap.set(node.mult, {
++      clearProps: 'scale,filter,fontSize,opacity,autoAlpha',
++      x: 0,
++      y: 0,
++      xPercent: 0,
++      yPercent: 0,
++    });
++  }
++}
++
++function updateHud() {
++  els.balance.textContent = formatVardinShort(state.balance);
++  els.win.textContent = formatVardinShort(state.lastWin);
++  els.bet.textContent = formatVardinShort(state.bet);
++  if (els.bank) els.bank.textContent = formatVardinShort(rewardBank);
++  els.buyCost.textContent = `${BUY_BONUS_COST_MULT}×`;
++  els.superCost.textContent = `${BUY_SUPER_COST_MULT}×`;
++
++  const inBonus = state.mode === 'bonus' || state.mode === 'super';
++  els.fsBadge.classList.toggle('is-hidden', !inBonus);
++  els.spins.textContent = String(state.spinsLeft);
++  els.spinLabel.textContent = inBonus ? 'FS' : 'SPIN';
++
++  const locked = animating || inBonus;
++  els.betMinus.disabled = locked;
++  els.betPlus.disabled = locked;
++  els.buyBtn.disabled = locked;
++  els.buySuperBtn.disabled = locked;
++  els.spinBtn.disabled = animating;
++}
++
++function renderPromoList() {
++  if (!els.promoList) return;
++  els.promoList.innerHTML = PROMO_TIERS.map((tier) => {
++    const affordable = rewardBank + 1e-9 >= tier.cost;
++    return `
++      <article class="promo-card" data-tier="${tier.id}">
++        <div>
++          <div class="promo-card__title">${tier.title}</div>
++          <span class="promo-card__meta">${tier.hint} · ${formatVardinShort(tier.cost)} баллов</span>
++        </div>
++        <button type="button" class="promo-card__btn" data-redeem="${tier.id}" ${affordable ? '' : 'disabled'}>
++          Обменять
++        </button>
++      </article>
++    `;
++  }).join('');
++
++  els.promoList.querySelectorAll('[data-redeem]').forEach((btn) => {
++    btn.addEventListener('click', () => onRedeem(btn.getAttribute('data-redeem')));
++  });
++}
++
++function showIssuedCode(code) {
++  lastIssuedCode = code;
++  if (!els.promoCodeBox) return;
++  els.promoCodeBox.classList.remove('is-hidden');
++  els.promoCodeValue.textContent = code;
++}
++
++function openRewardOverlay({ roundWin, pity = 0, title = 'Бонус завершён' } = {}) {
++  document.getElementById('reward-title').textContent = title;
++  if (els.rewardSub) {
++    els.rewardSub.textContent = `${getTelegramUserName()}, обменяйте баллы на скидку в домашней кондитерской`;
++  }
++  els.overlayPoints.textContent = `${formatVardinShort(roundWin)} баллов`;
++  if (els.rewardPity) {
++    if (pity > 0) {
++      els.rewardPity.textContent = `Гарантия раунда: +${formatVardinShort(pity)} до промокода 5%`;
++      els.rewardPity.classList.remove('is-hidden');
++    } else {
++      els.rewardPity.classList.add('is-hidden');
++    }
++  }
++  if (els.rewardBankTotal) {
++    els.rewardBankTotal.textContent = formatVardinShort(rewardBank);
++  }
++  if (els.promoCodeBox) els.promoCodeBox.classList.add('is-hidden');
++  renderPromoList();
++  els.overlay.classList.add('is-open');
++}
++
++function onRedeem(tierId) {
++  const result = redeemPromo(rewardBank, tierId);
++  if (!result.ok) {
++    showToast('Недостаточно баллов');
++    return;
++  }
++  rewardBank = result.bankAfter;
++  promoCodes = [
++    {
++      code: result.code,
++      discount: result.tier.discount,
++      tierId: result.tier.id,
++      issuedAt: result.issuedAt,
++    },
++    ...promoCodes,
++  ].slice(0, 30);
++  saveCache();
++  updateHud();
++  renderPromoList();
++  showIssuedCode(result.code);
++  showToast(`Промокод −${result.tier.discount}% готов`);
++  if (els.rewardBankTotal) {
++    els.rewardBankTotal.textContent = formatVardinShort(rewardBank);
++  }
++}
++
++function settleBonusRound(rawRoundWin) {
++  const { credited, pity } = applyBonusPity(rawRoundWin);
++  rewardBank = +(rewardBank + credited).toFixed(2);
++  saveCache();
++  updateHud();
++  openRewardOverlay({ roundWin: credited, pity });
++  els.status.textContent = `Бонус в баллы · от ${MIN_BONUS_ROUND_POINTS} на промокод 5%`;
++}
++
++function setBusy(busy) {
++  animating = busy;
++  state.busy = busy;
++  updateHud();
++}
++
++function wait(ms) {
++  if (reduceMotion) return Promise.resolve();
++  return new Promise((resolve) => gsap.delayedCall(ms / 1000, resolve));
++}
++
++function showToast(text) {
++  els.toast.textContent = text;
++  gsap.killTweensOf(els.toast);
++  gsap.fromTo(
++    els.toast,
++    { y: 90, opacity: 0 },
++    {
++      y: 0,
++      opacity: 1,
++      duration: reduceMotion ? 0.01 : 0.32,
++      ease: 'power3.out',
++      onComplete: () => {
++        gsap.to(els.toast, { delay: 1.15, y: 70, opacity: 0, duration: 0.28 });
++      },
++    },
++  );
++}
++
++function cellCenterInFx(cellIndex) {
++  const rect = cellNodes[cellIndex].el.getBoundingClientRect();
++  const boardRect = els.fx.getBoundingClientRect();
++  return {
++    x: rect.left - boardRect.left + rect.width / 2,
++    y: rect.top - boardRect.top + rect.height / 2,
++    w: rect.width,
++    h: rect.height,
++  };
++}
++
++function spawnFxNode(className, x, y) {
++  const node = document.createElement('div');
++  node.className = className;
++  node.style.left = `${x}px`;
++  node.style.top = `${y}px`;
++  els.fx.appendChild(node);
++  return node;
++}
++
++/** Flying candy tile that matches a board symbol position. */
++function spawnFlyTile(cellIndex, symbolId) {
++  const { x, y, w } = cellCenterInFx(cellIndex);
++  const symbol = SYMBOL_BY_ID[symbolId];
++  const fly = spawnFxNode('fly-glyph', x, y);
++  const sizePx = Math.max(28, Math.round(w * 0.9));
++  fly.style.width = `${sizePx}px`;
++  fly.style.setProperty('--fly-size', `${sizePx}px`);
++  if (symbol) {
++    fly.classList.add(`sym-${symbol.id}`);
++    fly.style.setProperty('--sym-tint', symbol.tint);
++    fly.style.setProperty('--sym-deep', symbol.deep);
++    // Art span stays above tile gloss (::after)
++    fly.innerHTML = `<span class="fly-glyph__art">${symbol.glyph}</span>`;
++  }
++  gsap.set(fly, { x: 0, y: 0, xPercent: -50, yPercent: -50 });
++  return fly;
++}
++
++function hideTile(node) {
++  if (!node?.tile) return;
++  node.tile.classList.remove('is-filled');
++  node.glyph.textContent = '';
++  node.glyph.classList.remove('is-on');
++  gsap.set([node.tile, node.glyph], { clearProps: 'transform,filter,opacity' });
++}
++
++function revealTile(node) {
++  if (!node?.tile) return;
++  node.tile.classList.add('is-filled');
++  if (node.glyph.textContent) node.glyph.classList.add('is-on');
++  gsap.set([node.tile, node.glyph], { clearProps: 'opacity,transform,filter' });
++}
++
++function burstShockwave(cellIndex) {
++  if (reduceMotion) return;
++  const { x, y } = cellCenterInFx(cellIndex);
++  const wave = spawnFxNode('shockwave', x, y);
++  gsap.fromTo(
++    wave,
++    { scale: 0.35, opacity: 0.95 },
++    {
++      scale: 3.2,
++      opacity: 0,
++      duration: 0.55,
++      ease: 'power2.out',
++      onComplete: () => wave.remove(),
++    },
++  );
++}
++
++function burstSparks(cellIndex, count = 12) {
++  if (reduceMotion) return;
++  const { x, y } = cellCenterInFx(cellIndex);
++
++  for (let i = 0; i < count; i += 1) {
++    const isGlow = i % 3 === 0;
++    const spark = spawnFxNode(isGlow ? 'spark spark--glow' : 'spark spark--crumb', x, y);
++    const angle = (Math.PI * 2 * i) / count + gsap.utils.random(-0.2, 0.2);
++    const dist = gsap.utils.random(isGlow ? 22 : 16, isGlow ? 48 : 40);
++    gsap.fromTo(
++      spark,
++      { scale: isGlow ? 0.6 : 1, opacity: 1, rotation: 0 },
++      {
++        x: Math.cos(angle) * dist,
++        y: Math.sin(angle) * dist + gsap.utils.random(4, 18),
++        opacity: 0,
++        scale: 0,
++        rotation: gsap.utils.random(-180, 180),
++        duration: gsap.utils.random(0.45, 0.7),
++        ease: 'power3.out',
++        onComplete: () => spark.remove(),
++      },
++    );
++  }
++}
++
++function boardFlash() {
++  if (reduceMotion) return;
++  let flash = els.fx.querySelector('.fx-flash');
++  if (!flash) {
++    flash = document.createElement('div');
++    flash.className = 'fx-flash';
++    els.fx.appendChild(flash);
++  }
++  gsap.fromTo(
++    flash,
++    { opacity: 0.55 },
++    { opacity: 0, duration: 0.45, ease: 'power2.out' },
++  );
++}
++
++function clusterCenterInFx(cells) {
++  if (!cells?.length) {
++    const board = els.fx.getBoundingClientRect();
++    return { x: board.width / 2, y: board.height * 0.42 };
++  }
++  let sx = 0;
++  let sy = 0;
++  for (const i of cells) {
++    const p = cellCenterInFx(i);
++    sx += p.x;
++    sy += p.y;
++  }
++  return { x: sx / cells.length, y: sy / cells.length };
++}
++
++/** Soft vapor wisps rising from a cell (not an explosion). */
++function puffVapor(cellIndex, count = 5) {
++  if (reduceMotion || liteFx) return;
++  const { x, y } = cellCenterInFx(cellIndex);
++  for (let i = 0; i < count; i += 1) {
++    const mist = spawnFxNode('vapor', x, y);
++    const driftX = gsap.utils.random(-14, 14);
++    gsap.fromTo(
++      mist,
++      {
++        x: gsap.utils.random(-6, 6),
++        y: gsap.utils.random(-4, 6),
++        xPercent: -50,
++        yPercent: -50,
++        scale: gsap.utils.random(0.55, 1),
++        opacity: gsap.utils.random(0.35, 0.7),
++      },
++      {
++        x: driftX,
++        y: gsap.utils.random(-36, -18),
++        scale: gsap.utils.random(1.2, 1.8),
++        opacity: 0,
++        duration: gsap.utils.random(0.35, 0.55),
++        ease: 'power1.out',
++        onComplete: () => mist.remove(),
++      },
++    );
++  }
++}
++
++/** Winning tiles dissolve / evaporate in place — no outward blast. */
++async function explodeCells(winningCells) {
++  if (reduceMotion) {
++    winningCells.forEach((i) => hideTile(cellNodes[i]));
++    return;
++  }
++
++  const winTiles = winningCells.map((i) => cellNodes[i].tile);
++  const winGlyphs = winningCells.map((i) => cellNodes[i].glyph);
++
++  winningCells.forEach((i) => cellNodes[i].el.classList.add('is-vanishing'));
++
++  // Opacity + scale only (no blur/filter — those stall emoji on phones)
++  const dur = liteFx ? 0.22 : 0.34;
++  await gsap
++    .timeline()
++    .to([winTiles, winGlyphs], {
++      y: liteFx ? -6 : -10,
++      scale: 0.55,
++      opacity: 0,
++      duration: dur,
++      ease: 'power2.in',
++      stagger: { each: liteFx ? 0.008 : 0.014, from: 'center' },
++    });
++
++  winningCells.forEach((i) => {
++    if (!liteFx) puffVapor(i, 3);
++    hideTile(cellNodes[i]);
++    cellNodes[i].el.classList.remove('is-vanishing');
++    gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
++      clearProps: 'transform,filter,opacity',
++    });
++  });
++}
++
++/** Win sum floats near the cluster centre where pieces just vanished. */
++function floatWin(amount, atCells = []) {
++  if (!amount) return;
++  const { x, y } = clusterCenterInFx(atCells);
++  const node = document.createElement('div');
++  node.className = 'float-num';
++  node.textContent = `+${formatVardinShort(amount)}`;
++  node.style.left = `${x}px`;
++  node.style.top = `${y}px`;
++  els.fx.appendChild(node);
++  gsap.fromTo(
++    node,
++    { xPercent: -50, yPercent: -50, y: 8, opacity: 0, scale: 0.75 },
++    {
++      y: -36,
++      opacity: 1,
++      scale: 1.12,
++      duration: reduceMotion ? 0.01 : 0.65,
++      ease: 'power3.out',
++      onComplete: () => {
++        gsap.to(node, {
++          opacity: 0,
++          y: -56,
++          duration: 0.38,
++          onComplete: () => node.remove(),
++        });
++      },
++    },
++  );
++}
++
++function winTierFor(amount) {
++  const x = amount / Math.max(1, state.bet);
++  if (x >= 50) return 'EPIC';
++  if (x >= 20) return 'MEGA';
++  if (x >= 8) return 'BIG';
++  return '';
++}
++
++async function showWinBanner(amount) {
++  if (!amount) return;
++  const tier = winTierFor(amount);
++  const tierEl = document.getElementById('win-banner-tier');
++  els.winBanner.classList.remove('is-hidden', 'is-big', 'is-mega', 'is-epic');
++  if (tier === 'BIG') els.winBanner.classList.add('is-big');
++  if (tier === 'MEGA') els.winBanner.classList.add('is-mega');
++  if (tier === 'EPIC') els.winBanner.classList.add('is-epic');
++  if (tierEl) tierEl.textContent = tier;
++  els.winBannerText.textContent = formatVardinShort(amount);
++  await gsap.fromTo(
++    els.winBanner,
++    { opacity: 0, scale: 0.7 },
++    { opacity: 1, scale: 1, duration: reduceMotion ? 0.01 : 0.5, ease: 'back.out(1.6)' },
++  );
++  await wait(tier ? 1100 : 850);
++  await gsap.to(els.winBanner, {
++    opacity: 0,
++    scale: 1.08,
++    duration: reduceMotion ? 0.01 : 0.35,
++  });
++  els.winBanner.classList.add('is-hidden');
++}
++
++/** Big center celebration when Free Spins are awarded (+5 etc.). */
++async function showFreeSpinsAward(amount = 5) {
++  if (!els.fsAward || !amount) return;
++
++  els.fsAward.classList.remove('is-hidden');
++  els.fsAwardValue.textContent = `+${amount}`;
++  gsap.set(els.fsAward, { opacity: 1 });
++  gsap.set(els.fsAwardCard, { scale: 0.55, rotation: -8, opacity: 0 });
++
++  if (tg?.HapticFeedback) {
++    try {
++      tg.HapticFeedback.notificationOccurred('success');
++    } catch {
++      /* ignore */
++    }
++  }
++
++  // Confetti sparks around the card
++  if (!reduceMotion) {
++    const rect = els.fsAwardCard.getBoundingClientRect();
++    const cx = rect.left + rect.width / 2;
++    const cy = rect.top + rect.height / 2;
++    for (let i = 0; i < 18; i += 1) {
++      const spark = document.createElement('div');
++      spark.className = 'fs-award__spark';
++      spark.style.left = `${cx}px`;
++      spark.style.top = `${cy}px`;
++      spark.style.position = 'fixed';
++      spark.style.zIndex = '51';
++      document.body.appendChild(spark);
++      const angle = (Math.PI * 2 * i) / 18;
++      const dist = gsap.utils.random(60, 130);
++      gsap.to(spark, {
++        x: Math.cos(angle) * dist,
++        y: Math.sin(angle) * dist,
++        opacity: 0,
++        scale: 0,
++        duration: 0.85,
++        ease: 'power2.out',
++        onComplete: () => spark.remove(),
++      });
++    }
++  }
++
++  await gsap
++    .timeline()
++    .to(els.fsAwardCard, {
++      scale: 1.08,
++      rotation: 0,
++      opacity: 1,
++      duration: reduceMotion ? 0.01 : 0.45,
++      ease: 'back.out(1.8)',
++    })
++    .to(els.fsAwardCard, {
++      scale: 1,
++      duration: reduceMotion ? 0.01 : 0.18,
++      ease: 'power2.out',
++    })
++    .to(els.fsAwardValue, {
++      scale: 1.15,
++      duration: reduceMotion ? 0.01 : 0.22,
++      yoyo: true,
++      repeat: 1,
++      ease: 'power1.inOut',
++    });
++
++  await wait(1100);
++
++  await gsap.to(els.fsAward, {
++    opacity: 0,
++    duration: reduceMotion ? 0.01 : 0.35,
++    ease: 'power2.in',
++  });
++  els.fsAward.classList.add('is-hidden');
++  gsap.set(els.fsAwardCard, { clearProps: 'transform,opacity' });
++}
++
++/** Initial fill: candy tiles fall from above the board into each cell. */
++function animateDropIn(symbols, multipliers, marks) {
++  paintBoard(symbols, multipliers, marks, []);
++  if (reduceMotion) return Promise.resolve();
++
++  // Mobile: animate real tiles (no 49 fly clones) so icons stay sharp.
++  if (liteFx) {
++    const tiles = [];
++    const glyphs = [];
++    cellNodes.forEach((n, i) => {
++      if (!symbols[i]) return;
++      tiles.push(n.tile);
++      glyphs.push(n.glyph);
++    });
++    gsap.set([...tiles, ...glyphs], { opacity: 0, y: -18, scale: 0.92 });
++    return gsap.to([...tiles, ...glyphs], {
++      opacity: 1,
++      y: 0,
++      scale: 1,
++      duration: 0.28,
++      ease: 'power2.out',
++      stagger: { each: 0.012, from: 'start' },
++      onComplete: () => {
++        gsap.set([...tiles, ...glyphs], { clearProps: 'opacity,transform' });
++      },
++    });
++  }
++
++  const size = cellSize();
++  cellNodes.forEach((n) => {
++    gsap.set([n.tile, n.glyph], { opacity: 0 });
++  });
++
++  const tl = gsap.timeline({
++    onComplete: () => {
++      cellNodes.forEach((n) => {
++        gsap.set([n.tile, n.glyph], { clearProps: 'opacity,transform,filter' });
++      });
++    },
++  });
++
++  let t = 0;
++  for (let c = 0; c < GRID_SIZE; c += 1) {
++    for (let r = 0; r < GRID_SIZE; r += 1) {
++      const i = r * GRID_SIZE + c;
++      const id = symbols[i];
++      if (!id) continue;
++      const fly = spawnFlyTile(i, id);
++      const startY = -(r + 2.2) * size;
++
++      tl.fromTo(
++        fly,
++        { x: 0, y: startY, opacity: 1, scale: 0.92 },
++        {
++          x: 0,
++          y: 0,
++          scale: 1,
++          duration: 0.4 + r * 0.015,
++          ease: 'power2.out',
++          onComplete: () => {
++            gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
++              opacity: 1,
++              clearProps: 'opacity',
++            });
++            fly.remove();
++          },
++        },
++        t,
++      );
++      t += 0.028;
++    }
++  }
++  return tl;
++}
++
++async function animateUpgrades(upgrades) {
++  const changed = (upgrades || []).filter(
++    (up) => up.before.mult !== up.after.mult || up.before.marked !== up.after.marked,
++  );
++  if (!changed.length) return;
++
++  const tl = gsap.timeline();
++  const pulseEls = [];
++  for (const up of changed) {
++    const node = cellNodes[up.cell];
++    const m = up.after.mult;
++    node.el.classList.add('is-marked');
++    clearMultTier(node.mult);
++    clearMultTier(node.el);
++
++    // Always pin badge to the cell corner — never re-center on multiply.
++    gsap.set([node.mult, node.mark], {
++      x: 0,
++      y: 0,
++      xPercent: 0,
++      yPercent: 0,
++      left: 'auto',
++      top: 'auto',
++      right: 1,
++      bottom: 1,
++      transformOrigin: '100% 100%',
++    });
++
++    if (m > 0) {
++      node.mult.textContent = `×${m}`;
++      node.mult.classList.add('is-on');
++      node.mark.classList.remove('is-on');
++      const tier = multTier(m);
++      node.mult.classList.add(`mult-tier-${tier}`);
++      node.el.classList.add(`mult-tier-${tier}`);
++      pulseEls.push(node.mult);
++    } else if (up.after.marked) {
++      node.mult.classList.remove('is-on');
++      node.mult.textContent = '';
++      node.mark.classList.add('is-on');
++      pulseEls.push(node.mark);
++    }
++
++    if (!reduceMotion) {
++      const el = pulseEls[pulseEls.length - 1];
++      tl.fromTo(
++        el,
++        { autoAlpha: 0.55, scale: 0.75 },
++        {
++          autoAlpha: 1,
++          scale: 1,
++          duration: 0.32,
++          ease: 'back.out(1.6)',
++          // Keep GSAP from inventing a center translate
++          x: 0,
++          y: 0,
++          xPercent: 0,
++          yPercent: 0,
++        },
++        '<0.03',
++      );
++    }
++  }
++  if (!reduceMotion) await tl;
++  // Clear only scale/filter — leave corner anchors intact
++  gsap.set(pulseEls, {
++    clearProps: 'scale,filter,opacity,autoAlpha',
++    x: 0,
++    y: 0,
++    xPercent: 0,
++    yPercent: 0,
++  });
++}
++
++/**
++ * True cascade:
++ * 1) board with holes after explode
++ * 2) pieces above fall down into empty slots
++ * 3) new pieces fall from above the board into remaining holes
++ */
++async function animateCascadeFalls(step) {
++  const size = cellSize();
++  const afterExplode = step.symbolsAfterExplode || step.symbolsBefore.map((s, i) =>
++    step.winningCells.includes(i) ? null : s,
++  );
++
++  paintBoard(afterExplode, step.multipliersAfter, step.marksAfter, []);
++
++  if (reduceMotion || liteFx) {
++    // Fast path: paint gravity + drops immediately, short pop-in for new icons
++    paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
++    if (liteFx && !reduceMotion) {
++      const dropNodes = (step.newDropCells || []).flatMap((i) => [
++        cellNodes[i].tile,
++        cellNodes[i].glyph,
++      ]);
++      if (dropNodes.length) {
++        gsap.fromTo(
++          dropNodes,
++          { opacity: 0, y: -14, scale: 0.9 },
++          {
++            opacity: 1,
++            y: 0,
++            scale: 1,
++            duration: 0.22,
++            ease: 'power2.out',
++            stagger: 0.01,
++            onComplete: () => gsap.set(dropNodes, { clearProps: 'opacity,transform' }),
++          },
++        );
++        await wait(240);
++      }
++    }
++    return;
++  }
++
++  const moves = step.moves || [];
++  if (moves.length) {
++    for (const move of moves) {
++      hideTile(cellNodes[move.from]);
++    }
++
++    const slideTl = gsap.timeline();
++    moves.forEach((move, order) => {
++      const from = cellCenterInFx(move.from);
++      const to = cellCenterInFx(move.to);
++      const fly = spawnFlyTile(move.from, move.id);
++      const col = move.to % GRID_SIZE;
++      const start = col * 0.015 + order * 0.006;
++
++      slideTl.to(
++        fly,
++        {
++          x: to.x - from.x,
++          y: to.y - from.y,
++          duration: 0.26 + move.rows * 0.06,
++          ease: 'power3.in',
++          onComplete: () => fly.remove(),
++        },
++        start,
++      );
++    });
++    await slideTl;
++  }
++
++  paintBoard(step.symbolsAfterGravity, step.multipliersAfter, step.marksAfter, []);
++
++  const drops = step.newDropCells || [];
++  if (!drops.length) {
++    paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
++    return;
++  }
++
++  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
++  for (const i of drops) {
++    gsap.set([cellNodes[i].tile, cellNodes[i].glyph], { opacity: 0 });
++  }
++
++  const dropTl = gsap.timeline();
++  let t = 0;
++  for (let c = 0; c < GRID_SIZE; c += 1) {
++    const colDrops = drops
++      .filter((i) => i % GRID_SIZE === c)
++      .sort((a, b) => a - b);
++    colDrops.forEach((i, orderInCol) => {
++      const id = step.symbolsAfter[i];
++      const fly = spawnFlyTile(i, id);
++      const rowsFall = Math.max(2, step.fallDistance[i] || 2);
++      const startY = -(rowsFall + 1.2) * size;
++
++      dropTl.fromTo(
++        fly,
++        { x: 0, y: startY, opacity: 1, scale: 0.92 },
++        {
++          x: 0,
++          y: 0,
++          scale: 1,
++          duration: 0.32 + orderInCol * 0.03,
++          ease: 'power2.out',
++          onComplete: () => {
++            revealTile(cellNodes[i]);
++            fly.remove();
++          },
++        },
++        t,
++      );
++      t += 0.04;
++    });
++  }
++
++  await dropTl;
++  gsap.set(
++    cellNodes.flatMap((n) => [n.tile, n.glyph]),
++    { clearProps: 'transform,opacity,filter' },
++  );
++  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
++}
++
++async function animateStep(step) {
++  paintBoard(step.symbolsBefore, step.multipliersBefore, step.marksBefore, step.winningCells);
++
++  if (tg?.HapticFeedback) {
++    try {
++      tg.HapticFeedback.impactOccurred('light');
++    } catch {
++      /* ignore */
++    }
++  }
++  // Sum appears as pieces evaporate, roughly over the cluster centre
++  floatWin(step.stepWin, step.winningCells);
++  await explodeCells(step.winningCells);
++
++  for (const i of step.winningCells) {
++    cellNodes[i].el.classList.remove('is-win', 'is-exploding', 'is-vanishing');
++    gsap.set(cellNodes[i].tile, { clearProps: 'transform,filter,opacity' });
++    gsap.set(cellNodes[i].glyph, { clearProps: 'transform,filter,opacity' });
++  }
++
++  await animateUpgrades(step.upgrades);
++  await wait(liteFx ? 40 : 100);
++  await animateCascadeFalls(step);
++  await wait(liteFx ? 60 : 140);
++}
++
++async function runResult(result) {
++  await animateDropIn(result.opening.symbols, result.opening.multipliers, result.opening.marks);
++
++  for (const step of result.steps) {
++    await animateStep(step);
++  }
++
++  if (result.spinWin > 0) {
++    await showWinBanner(result.spinWin);
++  }
++
++  paintBoard(result.symbols, result.multipliers, result.marks, []);
++  state.lastWin = result.spinWin;
++  updateHud();
++}
++
++async function onSpin() {
++  if (animating) return;
++
++  if (state.mode === 'bonus' || state.mode === 'super') {
++    setBusy(true);
++    els.status.textContent = 'Free Spins — липкие множители';
++    const result = playFreeSpin(state);
++    if (!result.ok) {
++      setBusy(false);
++      return;
++    }
++    await runResult(result);
++    if (result.retrigger) {
++      await showFreeSpinsAward(result.retrigger);
++      showToast(`🍭 ×${result.scatterCount} → +${result.retrigger} FREE SPINS`);
++    }
++    if (result.done) {
++      fillEmptyCells(state);
++      paintBoard(state.symbols, state.multipliers, state.marks, []);
++      settleBonusRound(result.totalBonusWin);
++    } else {
++      saveCache();
++    }
++    setBusy(false);
++    return;
++  }
++
++  setBusy(true);
++  const result = playBaseSpin(state);
++  if (!result.ok) {
++    showToast(result.reason === 'funds' ? 'Недостаточно Вардин' : 'Подождите…');
++    setBusy(false);
++    return;
++  }
++  els.status.textContent = 'Каскад…';
++  await runResult(result);
++  saveCache();
++  if (result.triggeredBonus) {
++    await showFreeSpinsAward(result.awardedSpins || 10);
++    showToast(`🍭 ×${result.scatterCount} → ${result.awardedSpins} FREE SPINS`);
++    els.status.textContent = 'Free Spins · sticky множители · 🍭×3 = +5';
++    updateHud();
++    paintBoard(state.symbols, state.multipliers, state.marks, []);
++  } else {
++    els.status.textContent =
++      result.spinWin > 0
++        ? `Выигрыш ${formatVardin(result.spinWin)}`
++        : 'Как Sugar Rush 1000: метка → ×2 → ×4… · 🍭3+=FS · баллы→промокод';
++  }
++  setBusy(false);
++}
++
++function openBuy(kind) {
++  if (animating || state.mode !== 'base') return;
++  pendingBuy = kind;
++  const mult = kind === 'super' ? BUY_SUPER_COST_MULT : BUY_BONUS_COST_MULT;
++  const cost = state.bet * mult;
++  els.buyOverlayTitle.textContent = kind === 'super' ? 'SUPER FREE SPINS' : 'BUY FREE SPINS';
++  els.buyOverlayText.textContent =
++    kind === 'super'
++      ? '10 фриспинов · все клетки сразу ×2, липкие множители'
++      : '10 фриспинов · чистые sticky-spots: метка → ×2 → ×4…';
++  els.buyOverlayPrice.textContent = formatVardin(cost);
++  els.buyOverlay.classList.add('is-open');
++}
++
++function confirmBuy() {
++  if (!pendingBuy) return;
++  const result = buyBonus(state, { superBonus: pendingBuy === 'super' });
++  els.buyOverlay.classList.remove('is-open');
++  pendingBuy = null;
++  if (!result.ok) {
++    showToast(result.reason === 'funds' ? 'Недостаточно Вардин' : 'Сейчас нельзя');
++    return;
++  }
++  paintBoard(result.symbols, result.multipliers, result.marks, []);
++  updateHud();
++  saveCache();
++  showToast(result.mode === 'super' ? 'SUPER BONUS!' : 'FREE SPINS!');
++  els.status.textContent = 'Нажмите SPIN / FS для фриспина';
++}
++
++function bind() {
++  els.spinBtn.addEventListener('click', onSpin);
++  els.betMinus.addEventListener('click', () => {
++    if (animating || state.mode !== 'base') return;
++    changeBet(state, -1);
++    updateHud();
++    saveCache();
++  });
++  els.betPlus.addEventListener('click', () => {
++    if (animating || state.mode !== 'base') return;
++    changeBet(state, 1);
++    updateHud();
++    saveCache();
++  });
++  els.buyBtn.addEventListener('click', () => openBuy('bonus'));
++  els.buySuperBtn.addEventListener('click', () => openBuy('super'));
++  els.buyCancel.addEventListener('click', () => {
++    pendingBuy = null;
++    els.buyOverlay.classList.remove('is-open');
++  });
++  els.buyConfirm.addEventListener('click', confirmBuy);
++  els.overlayClose.addEventListener('click', () => {
++    els.overlay.classList.remove('is-open');
++    updateHud();
++    saveCache();
++  });
++  els.walletBtn?.addEventListener('click', () => {
++    openRewardOverlay({
++      roundWin: rewardBank,
++      pity: 0,
++      title: 'Баллы и промокоды',
++    });
++    if (els.overlayPoints) {
++      els.overlayPoints.textContent = `${formatVardinShort(rewardBank)} баллов`;
++    }
++    if (promoCodes[0]) showIssuedCode(promoCodes[0].code);
++  });
++  els.promoCopy?.addEventListener('click', async () => {
++    const code = lastIssuedCode || promoCodes[0]?.code;
++    if (!code) return;
++    try {
++      await navigator.clipboard.writeText(code);
++      showToast('Промокод скопирован');
++    } catch {
++      showToast(code);
++    }
++  });
++}
++
++function setSplashProgress(pct) {
++  const bar = document.getElementById('splash-bar');
++  const label = document.getElementById('splash-pct');
++  const value = Math.max(0, Math.min(100, Math.round(pct)));
++  if (bar) bar.style.width = `${value}%`;
++  if (label) label.textContent = `${value}%`;
++}
++
++async function hideSplash() {
++  const splash = document.getElementById('splash');
++  if (!splash) return;
++  splash.classList.add('is-done');
++  if (reduceMotion) {
++    splash.remove();
++    return;
++  }
++  await gsap.to(splash, {
++    autoAlpha: 0,
++    scale: 1.04,
++    duration: 0.55,
++    ease: 'power2.inOut',
++  });
++  splash.remove();
++}
++
++async function boot() {
++  setSplashProgress(12);
++  initTelegram();
++  setSplashProgress(28);
++
++  restoreFromCache();
++  setSplashProgress(42);
++
++  buildBoard();
++  setSplashProgress(60);
++
++  fillEmptyCells(state);
++  paintBoard(state.symbols, state.multipliers, state.marks, []);
++  setSplashProgress(78);
++
++  bind();
++  updateHud();
++  saveCache();
++  const deviceTag = perf.isIPhone
++    ? 'iPhone'
++    : perf.isSamsung
++      ? 'Samsung'
++      : perf.isAndroid
++        ? 'Android'
++        : perf.isPhone
++          ? 'mobile'
++          : 'desktop';
++  els.status.textContent = perf.lite
++    ? `${getTelegramUserName()} · режим ${deviceTag} · быстрые анимации`
++    : `С возвращением, ${getTelegramUserName()} · sticky × · 🍭FS · баллы→скидка`;
++  setSplashProgress(100);
++  await wait(liteFx ? 80 : 160);
++  await hideSplash();
++
++  if (!reduceMotion && !liteFx) {
++    gsap.from('.slot', { opacity: 0, y: 12, duration: 0.35, ease: 'power2.out' });
++  }
++}
++
++boot();
+diff --git a/src/game/promo.js b/src/game/promo.js
+new file mode 100644
+index 0000000..89b9c04
+--- /dev/null
++++ b/src/game/promo.js
+@@ -0,0 +1,102 @@
++/**
++ * Promo rewards for the home confectionery.
++ * Winnings (Вардин) can be exchanged for discount codes.
++ */
++
++export const PROMO_CURRENCY_LABEL = 'баллов';
++
++/** Minimum points a finished bonus round should grant toward a 5% code. */
++export const MIN_BONUS_ROUND_POINTS = 500;
++
++export const PROMO_TIERS = [
++  {
++    id: 'p5',
++    discount: 5,
++    cost: 500,
++    title: 'Скидка 5%',
++    hint: 'На любой десерт',
++    prefix: 'SWEET5',
++  },
++  {
++    id: 'p7',
++    discount: 7,
++    cost: 900,
++    title: 'Скидка 7%',
++    hint: 'На пирожные и эклеры',
++    prefix: 'SWEET7',
++  },
++  {
++    id: 'p10',
++    discount: 10,
++    cost: 1500,
++    title: 'Скидка 10%',
++    hint: 'На торты от 1500 ₽',
++    prefix: 'SWEET10',
++  },
++  {
++    id: 'p15',
++    discount: 15,
++    cost: 2500,
++    title: 'Скидка 15%',
++    hint: 'На набор «Анна Павлова»',
++    prefix: 'SWEET15',
++  },
++  {
++    id: 'p20',
++    discount: 20,
++    cost: 4000,
++    title: 'Скидка 20%',
++    hint: 'На праздничный торт',
++    prefix: 'SWEET20',
++  },
++];
++
++export function getTier(id) {
++  return PROMO_TIERS.find((t) => t.id === id) || null;
++}
++
++function randomChunk(len = 4) {
++  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
++  let out = '';
++  for (let i = 0; i < len; i += 1) {
++    out += alphabet[(Math.random() * alphabet.length) | 0];
++  }
++  return out;
++}
++
++export function generatePromoCode(tier) {
++  return `${tier.prefix}-${randomChunk(4)}-${randomChunk(4)}`;
++}
++
++/**
++ * Apply pity floor so one full bonus round always covers at least a 5% code.
++ */
++export function applyBonusPity(rawRoundWin) {
++  const win = Math.max(0, Number(rawRoundWin) || 0);
++  if (win >= MIN_BONUS_ROUND_POINTS) {
++    return { credited: win, pity: 0 };
++  }
++  const pity = +(MIN_BONUS_ROUND_POINTS - win).toFixed(2);
++  return { credited: MIN_BONUS_ROUND_POINTS, pity };
++}
++
++export function canRedeem(bank, tierId) {
++  const tier = getTier(tierId);
++  if (!tier) return false;
++  return bank + 1e-9 >= tier.cost;
++}
++
++export function redeemPromo(bank, tierId) {
++  const tier = getTier(tierId);
++  if (!tier || bank + 1e-9 < tier.cost) {
++    return { ok: false, reason: 'funds' };
++  }
++  const code = generatePromoCode(tier);
++  return {
++    ok: true,
++    tier,
++    code,
++    bankAfter: +(bank - tier.cost).toFixed(2),
++    issuedAt: Date.now(),
++  };
++}
+diff --git a/src/game/promo.test.mjs b/src/game/promo.test.mjs
+new file mode 100644
+index 0000000..b43a1aa
+--- /dev/null
++++ b/src/game/promo.test.mjs
+@@ -0,0 +1,35 @@
++import assert from 'node:assert/strict';
++import {
++  PROMO_TIERS,
++  MIN_BONUS_ROUND_POINTS,
++  applyBonusPity,
++  redeemPromo,
++  canRedeem,
++} from './promo.js';
++
++{
++  assert.equal(MIN_BONUS_ROUND_POINTS, 500);
++  assert.equal(PROMO_TIERS[0].discount, 5);
++  assert.equal(PROMO_TIERS[0].cost, MIN_BONUS_ROUND_POINTS);
++}
++
++{
++  const low = applyBonusPity(120);
++  assert.equal(low.credited, 500);
++  assert.equal(low.pity, 380);
++
++  const ok = applyBonusPity(800);
++  assert.equal(ok.credited, 800);
++  assert.equal(ok.pity, 0);
++}
++
++{
++  assert.equal(canRedeem(500, 'p5'), true);
++  assert.equal(canRedeem(499, 'p5'), false);
++  const out = redeemPromo(500, 'p5');
++  assert.equal(out.ok, true);
++  assert.equal(out.bankAfter, 0);
++  assert.match(out.code, /^SWEET5-/);
++}
++
++console.log('promo.test.mjs: all passed');
+diff --git a/src/game/storage.js b/src/game/storage.js
+new file mode 100644
+index 0000000..10b112c
+--- /dev/null
++++ b/src/game/storage.js
+@@ -0,0 +1,72 @@
++/**
++ * Per-Telegram-user cache (localStorage) for win bank and promo codes.
++ */
++
++const STORAGE_PREFIX = 'sweet-rush-v1';
++
++export function getTelegramUserId() {
++  const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
++  if (user?.id) return String(user.id);
++  return 'guest';
++}
++
++export function getTelegramUserName() {
++  const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
++  if (!user) return 'Гость';
++  return [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'Игрок';
++}
++
++function storageKey(userId = getTelegramUserId()) {
++  return `${STORAGE_PREFIX}:${userId}`;
++}
++
++export function loadUserCache() {
++  try {
++    const raw = localStorage.getItem(storageKey());
++    if (!raw) return defaultCache();
++    const data = JSON.parse(raw);
++    return {
++      ...defaultCache(),
++      ...data,
++      codes: Array.isArray(data.codes) ? data.codes : [],
++    };
++  } catch {
++    return defaultCache();
++  }
++}
++
++export function defaultCache() {
++  return {
++    userId: getTelegramUserId(),
++    rewardBank: 0,
++    balance: null, // null → use engine START_BALANCE on first run
++    betIndex: null,
++    codes: [],
++    updatedAt: 0,
++  };
++}
++
++export function saveUserCache(partial) {
++  const prev = loadUserCache();
++  const next = {
++    ...prev,
++    ...partial,
++    userId: getTelegramUserId(),
++    updatedAt: Date.now(),
++  };
++  try {
++    localStorage.setItem(storageKey(), JSON.stringify(next));
++  } catch {
++    /* quota / private mode */
++  }
++  return next;
++}
++
++export function persistProgress({ rewardBank, balance, betIndex, codes }) {
++  return saveUserCache({
++    rewardBank,
++    balance,
++    betIndex,
++    codes: codes || loadUserCache().codes,
++  });
++}
+diff --git a/src/game/style.scss b/src/game/style.scss
+new file mode 100644
+index 0000000..0de5d52
+--- /dev/null
++++ b/src/game/style.scss
+@@ -0,0 +1,1334 @@
++:root {
++  --bg0: #2a0f3d;
++  --bg1: #5b1d6e;
++  --pink: #ff4d8d;
++  --pink-hot: #ff2d6f;
++  --violet: #c56bff;
++  --candy: #ffb3d1;
++  --gold: #ffd45a;
++  --gold-deep: #f5a623;
++  --mint: #5dffc2;
++  --panel: rgba(255, 255, 255, 0.12);
++  --cell: rgba(255, 255, 255, 0.16);
++  --cell-mark: rgba(255, 212, 90, 0.28);
++  --cell-win: rgba(255, 77, 141, 0.42);
++  --text: #fff7fb;
++  --muted: rgba(255, 247, 251, 0.7);
++  --font: "Nunito", system-ui, sans-serif;
++  --display: "Fredoka", "Nunito", system-ui, sans-serif;
++}
++
++*,
++*::before,
++*::after {
++  box-sizing: border-box;
++}
++
++html,
++body {
++  margin: 0;
++  min-height: 100%;
++  color: var(--text);
++  font-family: var(--font);
++  background:
++    radial-gradient(100% 70% at 50% -15%, rgba(255, 150, 200, 0.55), transparent 55%),
++    radial-gradient(80% 50% at 100% 20%, rgba(255, 210, 90, 0.28), transparent 50%),
++    radial-gradient(70% 45% at 0% 80%, rgba(255, 120, 200, 0.18), transparent 45%),
++    linear-gradient(180deg, #7a2a8a, var(--bg1) 40%, var(--bg0));
++  -webkit-font-smoothing: antialiased;
++  overflow-x: hidden;
++  user-select: none;
++}
++
++body {
++  min-height: 100dvh;
++  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
++    env(safe-area-inset-left);
++}
++
++.slot {
++  width: min(100%, 480px);
++  margin: 0 auto;
++  padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
++  min-height: 100dvh;
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++  box-sizing: border-box;
++}
++
++.slot__header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 8px;
++}
++
++.header-right {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
++
++.bank-chip {
++  appearance: none;
++  border: 1px solid rgba(255, 212, 90, 0.45);
++  border-radius: 14px;
++  padding: 6px 10px;
++  background: linear-gradient(180deg, rgba(255, 212, 90, 0.22), rgba(255, 77, 141, 0.18));
++  color: var(--text);
++  cursor: pointer;
++  text-align: center;
++  line-height: 1.1;
++}
++
++.bank-chip__label {
++  display: block;
++  font-size: 0.55rem;
++  letter-spacing: 0.08em;
++  color: var(--muted);
++}
++
++.bank-chip__value {
++  font-family: var(--display);
++  font-size: 1.05rem;
++  color: var(--gold);
++}
++
++.logo {
++  display: flex;
++  align-items: baseline;
++  gap: 6px;
++  font-family: var(--display);
++  font-weight: 700;
++  line-height: 1;
++}
++
++.logo__sweet {
++  font-size: 1.35rem;
++  color: var(--candy);
++  text-shadow: 0 2px 0 #c43b6e;
++}
++
++.logo__rush {
++  font-size: 1.35rem;
++  color: var(--gold);
++  text-shadow: 0 2px 0 #c47a10;
++}
++
++.logo__1k {
++  font-size: 0.95rem;
++  padding: 2px 8px;
++  border-radius: 999px;
++  background: linear-gradient(180deg, #fff, var(--gold));
++  color: #5a2a00;
++  box-shadow: 0 2px 0 #c47a10;
++}
++
++.fs-badge {
++  display: grid;
++  justify-items: center;
++  padding: 6px 12px;
++  border-radius: 14px;
++  background: linear-gradient(180deg, rgba(255, 77, 141, 0.35), rgba(123, 92, 255, 0.25));
++  border: 1px solid rgba(255, 255, 255, 0.18);
++}
++
++.fs-badge.is-hidden {
++  display: none;
++}
++
++.fs-badge__label {
++  font-size: 0.58rem;
++  letter-spacing: 0.08em;
++  color: var(--muted);
++}
++
++.fs-badge__value {
++  font-family: var(--display);
++  font-size: 1.35rem;
++  color: var(--gold);
++}
++
++.stage {
++  display: block;
++  flex: 1 1 auto;
++  min-height: 0;
++}
++
++.buy-rail {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 8px;
++}
++
++.buy-rail .buy-btn {
++  min-height: 48px;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  gap: 8px;
++  text-align: center;
++  padding: 10px 12px;
++  border: 0;
++  border-radius: 14px;
++  cursor: pointer;
++  color: #fff;
++  background: linear-gradient(180deg, #ff6b9d, #c2185b);
++  box-shadow: 0 4px 0 #8e0f3f;
++}
++
++.buy-rail .buy-btn--super {
++  background: linear-gradient(180deg, #ffb347, #ff6a00);
++  box-shadow: 0 4px 0 #b34800;
++}
++
++.buy-rail .buy-btn:disabled {
++  opacity: 0.45;
++  cursor: not-allowed;
++  box-shadow: none;
++}
++
++.buy-rail .buy-btn__title {
++  font-family: var(--display);
++  font-size: 0.85rem;
++  font-weight: 700;
++  line-height: 1.1;
++}
++
++.buy-rail .buy-btn__cost {
++  font-size: 0.75rem;
++  opacity: 0.95;
++  padding: 2px 8px;
++  border-radius: 999px;
++  background: rgba(0, 0, 0, 0.18);
++}
++
++.board-wrap {
++  position: relative;
++  width: min(100%, calc(100dvh - 210px));
++  max-width: 100%;
++  margin: 0 auto;
++  padding: 6px;
++  border-radius: 18px;
++  background:
++    linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06)),
++    rgba(90, 25, 110, 0.45);
++  border: 3px solid rgba(255, 210, 120, 0.55);
++  box-shadow:
++    0 10px 28px rgba(0, 0, 0, 0.28),
++    inset 0 1px 0 rgba(255, 255, 255, 0.22);
++  overflow: hidden;
++}
++
++.board {
++  display: grid;
++  grid-template-columns: repeat(7, minmax(0, 1fr));
++  grid-template-rows: repeat(7, minmax(0, 1fr));
++  gap: 3px;
++  aspect-ratio: 1;
++  width: 100%;
++  overflow: visible;
++}
++
++.cell {
++  position: relative;
++  width: 100%;
++  height: 100%;
++  min-width: 0;
++  min-height: 0;
++  aspect-ratio: 1;
++  border-radius: 14px;
++  background:
++    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.08), transparent 55%),
++    linear-gradient(180deg, rgba(40, 12, 58, 0.55), rgba(18, 6, 30, 0.72));
++  box-shadow:
++    inset 0 2px 4px rgba(0, 0, 0, 0.35),
++    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
++  display: grid;
++  place-items: center;
++  overflow: visible;
++  /* Size never changes — animate only tiles / FX, not the cell box */
++  transform: none !important;
++}
++
++.cell.is-empty {
++  background:
++    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.04), transparent 50%),
++    linear-gradient(180deg, rgba(28, 8, 42, 0.65), rgba(12, 4, 22, 0.85));
++}
++
++.cell.is-marked {
++  background:
++    radial-gradient(circle at 50% 35%, rgba(255, 212, 90, 0.18), transparent 55%),
++    linear-gradient(180deg, rgba(70, 30, 20, 0.55), rgba(30, 12, 18, 0.75));
++  box-shadow:
++    inset 0 0 0 1px rgba(255, 212, 90, 0.45),
++    inset 0 2px 4px rgba(0, 0, 0, 0.3);
++}
++
++.cell.is-win {
++  background:
++    radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.35), rgba(255, 77, 141, 0.45) 55%, transparent 70%);
++  box-shadow:
++    inset 0 0 0 1px rgba(255, 255, 255, 0.55),
++    0 0 22px rgba(255, 77, 141, 0.55);
++  z-index: 2;
++}
++
++.cell.is-exploding,
++.cell.is-vanishing {
++  background: radial-gradient(
++    circle at 50% 40%,
++    rgba(255, 255, 255, 0.28),
++    rgba(255, 200, 230, 0.16) 45%,
++    transparent 72%
++  );
++}
++
++/* Candy / pastry tile — the actual symbol position */
++.cell__tile {
++  position: absolute;
++  inset: 5%;
++  border-radius: 22%;
++  display: grid;
++  place-items: center;
++  opacity: 0;
++  transform: scale(0.92);
++  pointer-events: none;
++  z-index: 1;
++  transform-origin: 50% 50%;
++  background:
++    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
++    radial-gradient(circle at 70% 78%, rgba(0, 0, 0, 0.18), transparent 45%),
++    linear-gradient(160deg, var(--sym-tint, #ffc0d8), var(--sym-deep, #c04070));
++  box-shadow:
++    0 3px 0 rgba(0, 0, 0, 0.22),
++    0 6px 10px rgba(0, 0, 0, 0.2),
++    inset 0 1px 0 rgba(255, 255, 255, 0.45),
++    inset 0 -2px 4px rgba(0, 0, 0, 0.12);
++}
++
++.cell__tile.is-filled {
++  opacity: 1;
++  transform: scale(1);
++}
++
++.cell__tile::before {
++  content: "";
++  position: absolute;
++  inset: 12%;
++  border-radius: 50%;
++  background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.22), transparent 60%);
++  pointer-events: none;
++}
++
++.cell__tile::after {
++  content: "";
++  position: absolute;
++  left: 18%;
++  top: 12%;
++  width: 28%;
++  height: 16%;
++  border-radius: 999px;
++  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
++  transform: rotate(-28deg);
++  pointer-events: none;
++}
++
++.cell.is-win .cell__tile {
++  filter: brightness(1.12) saturate(1.15);
++  box-shadow:
++    0 3px 0 rgba(0, 0, 0, 0.18),
++    0 0 16px rgba(255, 255, 255, 0.45),
++    inset 0 1px 0 rgba(255, 255, 255, 0.55);
++}
++
++/* Fruit / pastry art — always centered and above numbers */
++.cell__glyph {
++  position: absolute;
++  left: 50%;
++  top: 50%;
++  translate: -50% -50%;
++  z-index: 6;
++  font-size: clamp(1.25rem, 6.2vw, 1.85rem);
++  line-height: 1;
++  opacity: 0;
++  pointer-events: none;
++  /* Avoid heavy filters on every icon — they stutter on phones */
++  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
++  transform-origin: 50% 50%;
++}
++
++.cell__glyph.is-on {
++  opacity: 1;
++}
++
++.cell__mult {
++  position: absolute;
++  left: auto !important;
++  right: 1px !important;
++  top: auto !important;
++  bottom: 1px !important;
++  translate: none !important;
++  /* Always bottom-right — scale from this corner on multiply */
++  transform-origin: 100% 100%;
++  height: 1.05rem;
++  min-width: 1.05rem;
++  width: max-content;
++  max-width: 70%;
++  padding: 0 4px;
++  border-radius: 999px;
++  font-family: var(--display);
++  font-weight: 700;
++  font-size: 0.52rem !important;
++  line-height: 1.05rem !important;
++  letter-spacing: 0;
++  color: #1a0a12;
++  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
++  background: radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold-deep));
++  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
++  opacity: 0;
++  transform: scale(0.8);
++  pointer-events: none;
++  z-index: 4;
++  text-align: center;
++  white-space: nowrap;
++  overflow: hidden;
++  box-sizing: border-box;
++}
++
++.cell__mult.is-on {
++  opacity: 0.95;
++  transform: scale(1);
++}
++
++/* Multiplier colour tiers (value grows → colour shifts) */
++.cell.mult-tier-2 {
++  box-shadow: inset 0 0 0 1px rgba(120, 200, 255, 0.35);
++}
++.cell__mult.mult-tier-2 {
++  background: linear-gradient(180deg, #b8e7ff, #4fa8e8);
++  color: #06243a;
++}
++
++.cell.mult-tier-4 {
++  box-shadow: inset 0 0 0 1px rgba(120, 255, 180, 0.4);
++}
++.cell__mult.mult-tier-4 {
++  background: linear-gradient(180deg, #b8ffd4, #2fd68a);
++  color: #06301c;
++}
++
++.cell.mult-tier-8 {
++  box-shadow: inset 0 0 0 1px rgba(255, 230, 120, 0.45);
++}
++.cell__mult.mult-tier-8 {
++  background: linear-gradient(180deg, #ffe9a0, #f0c029);
++  color: #3b1600;
++}
++
++.cell.mult-tier-16 {
++  box-shadow: inset 0 0 0 1px rgba(255, 170, 80, 0.5);
++}
++.cell__mult.mult-tier-16 {
++  background: linear-gradient(180deg, #ffd08a, #ff8a1a);
++  color: #3a1600;
++}
++
++.cell.mult-tier-32 {
++  box-shadow: inset 0 0 0 1px rgba(255, 120, 160, 0.55);
++}
++.cell__mult.mult-tier-32 {
++  background: linear-gradient(180deg, #ffb0c8, #ff4d8d);
++  color: #3a0018;
++}
++
++.cell.mult-tier-64 {
++  box-shadow: inset 0 0 0 1px rgba(220, 120, 255, 0.55);
++}
++.cell__mult.mult-tier-64 {
++  background: linear-gradient(180deg, #e0b0ff, #a14dff);
++  color: #1e0038;
++}
++
++.cell.mult-tier-128 {
++  box-shadow: inset 0 0 0 1px rgba(255, 90, 200, 0.6);
++}
++.cell__mult.mult-tier-128 {
++  background: linear-gradient(180deg, #ff9ae0, #e01aa8);
++  color: #2a0020;
++}
++
++.cell.mult-tier-256 {
++  box-shadow: inset 0 0 0 1px rgba(255, 80, 80, 0.65);
++}
++.cell__mult.mult-tier-256 {
++  background: linear-gradient(180deg, #ffb0a0, #ff3b3b);
++  color: #2a0000;
++}
++
++.cell.mult-tier-512 {
++  box-shadow: inset 0 0 0 1px rgba(255, 215, 80, 0.75);
++}
++.cell__mult.mult-tier-512 {
++  background: linear-gradient(180deg, #fff1a8, #ffb000);
++  color: #3a1e00;
++}
++
++/* Festive ×1024 — glow/shimmer only, cell box size unchanged */
++.cell.mult-tier-1024 {
++  background:
++    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.35), transparent 42%),
++    radial-gradient(circle at 70% 80%, rgba(255, 77, 141, 0.28), transparent 45%),
++    var(--cell-mark);
++  box-shadow:
++    inset 0 0 0 1px rgba(255, 255, 255, 0.9),
++    inset 0 0 12px rgba(255, 212, 90, 0.35),
++    0 0 16px rgba(255, 212, 90, 0.55);
++  animation: cell-1024-glow 1.6s ease-in-out infinite;
++}
++
++.cell.mult-tier-1024::before {
++  content: "";
++  position: absolute;
++  inset: 2px;
++  border-radius: 10px;
++  pointer-events: none;
++  background:
++    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.9) 0 1.5px, transparent 2px),
++    radial-gradient(circle at 75% 25%, rgba(255, 212, 90, 0.95) 0 1.2px, transparent 2px),
++    radial-gradient(circle at 60% 70%, rgba(255, 255, 255, 0.85) 0 1px, transparent 1.8px),
++    radial-gradient(circle at 30% 78%, rgba(255, 77, 141, 0.9) 0 1.2px, transparent 2px);
++  opacity: 0.85;
++  animation: cell-1024-sparkle 1.2s steps(2, end) infinite;
++}
++
++.cell__mult.mult-tier-1024 {
++  background: linear-gradient(110deg, #ffffff 0%, #ffd45a 35%, #ff2d6f 70%, #ffe08a 100%);
++  background-size: 200% 100%;
++  color: #2a0a18;
++  animation: mult-1024-shine 1.8s linear infinite;
++  box-shadow:
++    0 0 8px rgba(255, 212, 90, 0.8),
++    0 1px 3px rgba(0, 0, 0, 0.35);
++}
++
++@keyframes cell-1024-glow {
++  0%, 100% { filter: brightness(1); }
++  50% { filter: brightness(1.12); }
++}
++
++@keyframes cell-1024-sparkle {
++  0% { opacity: 0.55; transform: scale(1); }
++  50% { opacity: 1; transform: scale(1.02); }
++  100% { opacity: 0.7; transform: scale(1); }
++}
++
++@keyframes mult-1024-shine {
++  0% { background-position: 0% 50%; }
++  100% { background-position: 200% 50%; }
++}
++
++/* Permanent festive Free Spin cell — size stays fixed */
++.cell.is-scatter {
++  z-index: 2;
++  overflow: hidden;
++  background: #1a0f2e;
++  box-shadow:
++    inset 0 0 0 1px rgba(255, 255, 255, 0.75),
++    0 0 14px rgba(255, 77, 141, 0.55),
++    0 0 22px rgba(255, 212, 90, 0.35);
++}
++
++.cell.is-scatter::before {
++  content: "";
++  position: absolute;
++  inset: -40%;
++  z-index: 0;
++  pointer-events: none;
++  background: conic-gradient(#ff4d8d, #ffd45a, #5dffc2, #7b5cff, #ff9ae0, #ff4d8d);
++  animation: fs-ring-spin 2.4s linear infinite;
++}
++
++.cell.is-scatter::after {
++  content: "FS";
++  position: absolute;
++  top: 3px;
++  left: 4px;
++  z-index: 6;
++  font-family: var(--display);
++  font-size: 0.55rem;
++  font-weight: 700;
++  letter-spacing: 0.04em;
++  color: #3a1600;
++  background: linear-gradient(180deg, #fff, #ffd45a);
++  border-radius: 6px;
++  padding: 1px 4px;
++  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
++  animation: fs-badge-blink 1s ease-in-out infinite;
++}
++
++.cell.is-scatter .cell__tile {
++  z-index: 1;
++  inset: 8%;
++  background:
++    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.65), transparent 42%),
++    conic-gradient(from 200deg, #ff4d8d, #ffd45a, #5dffc2, #7b5cff, #ff9ae0, #ff4d8d);
++  box-shadow:
++    0 3px 0 rgba(0, 0, 0, 0.25),
++    0 0 14px rgba(255, 77, 141, 0.55),
++    inset 0 1px 0 rgba(255, 255, 255, 0.55);
++  animation: fs-tile-pulse 1.2s ease-in-out infinite;
++}
++
++.cell.is-scatter .cell__tile::before {
++  inset: 14%;
++  background: radial-gradient(circle at 45% 40%, #2a1440 0%, #1a0f2e 70%);
++  opacity: 0.92;
++}
++
++.cell.is-scatter .cell__glyph {
++  z-index: 6;
++  animation: fs-glyph-dance 1.1s ease-in-out infinite;
++  filter:
++    drop-shadow(0 0 6px rgba(255, 212, 90, 0.95))
++    drop-shadow(0 0 10px rgba(255, 77, 141, 0.65));
++}
++
++@keyframes fs-tile-pulse {
++  0%, 100% { filter: brightness(1) saturate(1.1); }
++  50% { filter: brightness(1.15) saturate(1.35); }
++}
++
++@keyframes fs-ring-spin {
++  to { transform: rotate(360deg); }
++}
++
++@keyframes fs-glyph-dance {
++  0%, 100% { transform: translateY(0) scale(1) rotate(-4deg); }
++  50% { transform: translateY(-2px) scale(1.12) rotate(4deg); }
++}
++
++@keyframes fs-badge-blink {
++  0%, 100% { opacity: 0.85; transform: scale(1); }
++  50% { opacity: 1; transform: scale(1.06); }
++}
++
++.cell__mark-dot {
++  position: absolute;
++  left: auto !important;
++  right: 3px !important;
++  top: auto !important;
++  bottom: 3px !important;
++  margin: 0;
++  width: 10px;
++  height: 10px;
++  border-radius: 50%;
++  transform-origin: 100% 100%;
++  background: radial-gradient(circle at 35% 30%, #fff6c8, #ffd45a 55%, #f0a020);
++  box-shadow:
++    0 0 8px rgba(255, 212, 90, 0.85),
++    inset 0 1px 0 rgba(255, 255, 255, 0.6);
++  opacity: 0;
++  z-index: 3;
++  pointer-events: none;
++}
++
++.cell__mark-dot.is-on {
++  opacity: 0.95;
++  animation: mark-pulse 1.2s ease-in-out infinite;
++}
++
++@keyframes mark-pulse {
++  0%, 100% { transform: scale(1); }
++  50% { transform: scale(1.12); }
++}
++
++.fx-layer {
++  pointer-events: none;
++  position: absolute;
++  inset: 8px;
++  overflow: hidden;
++  border-radius: 16px;
++  z-index: 4;
++}
++
++.fx-flash {
++  position: absolute;
++  inset: 0;
++  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.35), transparent 60%);
++  opacity: 0;
++}
++
++.spark {
++  position: absolute;
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  background: var(--gold);
++  box-shadow: 0 0 10px var(--pink);
++  will-change: transform, opacity;
++}
++
++.spark--glow {
++  width: 14px;
++  height: 14px;
++  background: radial-gradient(circle, #fff 0%, #ffd45a 40%, rgba(255, 77, 141, 0) 70%);
++  box-shadow: 0 0 16px rgba(255, 212, 90, 0.8);
++}
++
++.spark--crumb {
++  width: 5px;
++  height: 5px;
++  border-radius: 2px;
++  background: linear-gradient(135deg, #ffe9a8, #ff4d8d);
++  box-shadow: 0 0 6px rgba(255, 77, 141, 0.6);
++}
++
++.shockwave {
++  position: absolute;
++  width: 12px;
++  height: 12px;
++  margin: -6px 0 0 -6px;
++  border-radius: 50%;
++  border: 2px solid rgba(255, 255, 255, 0.85);
++  box-shadow: 0 0 18px rgba(255, 77, 141, 0.65);
++  opacity: 0.9;
++  will-change: transform, opacity;
++}
++
++.fly-glyph {
++  position: absolute;
++  display: grid;
++  place-items: center;
++  width: var(--fly-size, 12%);
++  aspect-ratio: 1;
++  border-radius: 22%;
++  font-size: clamp(1.05rem, 4.8vw, 1.45rem);
++  line-height: 1;
++  color: #fff;
++  background:
++    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
++    radial-gradient(circle at 70% 78%, rgba(0, 0, 0, 0.18), transparent 45%),
++    linear-gradient(160deg, var(--sym-tint, #ffc0d8), var(--sym-deep, #c04070));
++  box-shadow:
++    0 3px 0 rgba(0, 0, 0, 0.22),
++    0 6px 12px rgba(0, 0, 0, 0.28),
++    inset 0 1px 0 rgba(255, 255, 255, 0.45);
++  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
++  will-change: transform, opacity, filter;
++  z-index: 6;
++}
++
++.fly-glyph::before {
++  content: "";
++  position: absolute;
++  inset: 0;
++  border-radius: inherit;
++  background:
++    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.2), transparent 42%);
++  pointer-events: none;
++  z-index: 0;
++}
++
++.fly-glyph::after {
++  content: "";
++  position: absolute;
++  left: 18%;
++  top: 12%;
++  width: 28%;
++  height: 16%;
++  border-radius: 999px;
++  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
++  transform: rotate(-28deg);
++  pointer-events: none;
++  z-index: 0;
++}
++
++.fly-glyph__art {
++  position: relative;
++  z-index: 2;
++  line-height: 1;
++  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.28));
++}
++
++.fly-glyph.sym-freespin {
++  background:
++    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 40%),
++    conic-gradient(from 200deg, #ff4d8d, #ffd45a, #5dffc2, #7b5cff, #ff9ae0, #ff4d8d);
++}
++
++.vapor {
++  position: absolute;
++  width: 16px;
++  height: 16px;
++  border-radius: 50%;
++  background: radial-gradient(circle, rgba(255, 255, 255, 0.75), rgba(255, 200, 230, 0.25) 55%, transparent 70%);
++  filter: blur(2px);
++  pointer-events: none;
++  z-index: 5;
++  will-change: transform, opacity;
++}
++
++.float-num {
++  position: absolute;
++  left: 0;
++  top: 0;
++  font-family: var(--display);
++  font-weight: 700;
++  font-size: clamp(1.15rem, 5vw, 1.55rem);
++  color: var(--gold);
++  text-shadow:
++    0 2px 0 rgba(80, 20, 40, 0.35),
++    0 4px 16px rgba(0, 0, 0, 0.55);
++  z-index: 7;
++  white-space: nowrap;
++  pointer-events: none;
++}
++
++.win-banner {
++  position: absolute;
++  left: 50%;
++  top: 50%;
++  transform: translate(-50%, -50%) scale(0.8);
++  min-width: 58%;
++  padding: 14px 18px;
++  border-radius: 18px;
++  text-align: center;
++  background: linear-gradient(180deg, rgba(255, 77, 141, 0.95), rgba(123, 92, 255, 0.95));
++  border: 2px solid rgba(255, 255, 255, 0.35);
++  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
++  z-index: 6;
++  opacity: 0;
++  pointer-events: none;
++}
++
++.win-banner.is-hidden {
++  display: none;
++}
++
++.win-banner span {
++  display: block;
++  font-family: var(--display);
++  font-size: 1.8rem;
++  font-weight: 700;
++}
++
++.win-banner small {
++  color: rgba(255, 255, 255, 0.85);
++  letter-spacing: 0.04em;
++}
++
++.fs-award {
++  position: fixed;
++  inset: 0;
++  z-index: 50;
++  display: grid;
++  place-items: center;
++  pointer-events: none;
++  opacity: 0;
++  background: radial-gradient(circle at 50% 45%, rgba(255, 77, 141, 0.28), transparent 55%);
++}
++
++.fs-award.is-hidden {
++  display: none;
++}
++
++.fs-award__card {
++  min-width: min(86vw, 300px);
++  padding: 22px 26px;
++  border-radius: 24px;
++  text-align: center;
++  color: #fff;
++  background:
++    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.25), transparent 40%),
++    linear-gradient(135deg, #ff4d8d, #7b5cff 55%, #ffd45a);
++  border: 2px solid rgba(255, 255, 255, 0.45);
++  box-shadow:
++    0 18px 50px rgba(0, 0, 0, 0.45),
++    0 0 40px rgba(255, 77, 141, 0.45);
++}
++
++.fs-award__emoji {
++  display: block;
++  font-size: 2.4rem;
++  line-height: 1;
++  margin-bottom: 6px;
++  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
++}
++
++.fs-award__value {
++  display: block;
++  font-family: var(--display);
++  font-size: clamp(2.2rem, 10vw, 3rem);
++  font-weight: 700;
++  letter-spacing: 0.02em;
++  text-shadow: 0 3px 0 rgba(90, 30, 0, 0.25);
++}
++
++.fs-award__label {
++  display: block;
++  margin-top: 4px;
++  font-size: 0.95rem;
++  font-weight: 800;
++  letter-spacing: 0.12em;
++  opacity: 0.95;
++}
++
++.fs-award__spark {
++  position: absolute;
++  width: 8px;
++  height: 8px;
++  border-radius: 50%;
++  background: #ffd45a;
++  box-shadow: 0 0 10px #ff4d8d;
++}
++
++.hud {
++  display: grid;
++  gap: 6px;
++  flex-shrink: 0;
++}
++
++.hud-bar {
++  display: grid;
++  grid-template-columns: 1fr auto auto 1fr;
++  gap: 6px;
++  align-items: center;
++  padding: 8px;
++  border-radius: 20px;
++  background: rgba(20, 8, 36, 0.45);
++  border: 1px solid rgba(255, 255, 255, 0.14);
++}
++
++.meter {
++  padding: 6px 8px;
++  border-radius: 12px;
++  background: rgba(255, 255, 255, 0.08);
++  border: 1px solid rgba(255, 255, 255, 0.08);
++  min-width: 0;
++}
++
++.meter__label {
++  display: block;
++  font-size: 0.58rem;
++  letter-spacing: 0.1em;
++  color: var(--muted);
++}
++
++.meter__value {
++  font-family: var(--display);
++  font-size: 1.05rem;
++  color: #fff;
++  white-space: nowrap;
++  overflow: hidden;
++  text-overflow: ellipsis;
++}
++
++.meter--win .meter__value {
++  color: var(--gold);
++}
++
++.bet-ctrl {
++  display: grid;
++  grid-template-columns: 36px auto 36px;
++  align-items: center;
++  gap: 4px;
++  padding: 4px;
++  border-radius: 14px;
++  background: rgba(255, 255, 255, 0.08);
++}
++
++.bet-ctrl__btn {
++  width: 36px;
++  height: 36px;
++  border: 0;
++  border-radius: 10px;
++  font-size: 1.25rem;
++  font-weight: 800;
++  color: #fff;
++  background: linear-gradient(180deg, #ff7eb3, #d63384);
++  cursor: pointer;
++}
++
++.bet-ctrl__btn:disabled {
++  opacity: 0.4;
++  cursor: not-allowed;
++}
++
++.bet-ctrl__info {
++  text-align: center;
++  min-width: 44px;
++}
++
++.bet-ctrl__label {
++  display: block;
++  font-size: 0.55rem;
++  letter-spacing: 0.1em;
++  color: var(--muted);
++}
++
++.bet-ctrl__value {
++  font-family: var(--display);
++  font-size: 1rem;
++}
++
++.spin-btn {
++  position: relative;
++  width: 78px;
++  height: 78px;
++  border: 0;
++  border-radius: 50%;
++  cursor: pointer;
++  color: #4a1400;
++  font-family: var(--display);
++  font-weight: 800;
++  font-size: 0.95rem;
++  background: radial-gradient(circle at 35% 30%, #fff3c4, var(--gold) 45%, var(--gold-deep));
++  box-shadow:
++    0 7px 0 #b86b00,
++    0 12px 24px rgba(0, 0, 0, 0.3);
++}
++
++.spin-btn:active:not(:disabled) {
++  transform: translateY(3px);
++  box-shadow:
++    0 4px 0 #b86b00,
++    0 8px 14px rgba(0, 0, 0, 0.28);
++}
++
++.spin-btn:disabled {
++  opacity: 0.55;
++  cursor: not-allowed;
++}
++
++.spin-btn__ring {
++  position: absolute;
++  inset: 5px;
++  border-radius: 50%;
++  border: 2px dashed rgba(120, 50, 0, 0.35);
++}
++
++.win-banner__tier {
++  display: block;
++  font-family: var(--display);
++  font-size: 0.85rem;
++  letter-spacing: 0.14em;
++  margin-bottom: 2px;
++  color: #fff;
++  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
++}
++
++.win-banner.is-big {
++  background: linear-gradient(180deg, rgba(255, 180, 70, 0.95), rgba(255, 77, 141, 0.95));
++}
++
++.win-banner.is-mega {
++  background: linear-gradient(180deg, rgba(255, 100, 180, 0.96), rgba(140, 80, 255, 0.96));
++}
++
++.win-banner.is-epic {
++  background: linear-gradient(180deg, #fff3a0, #ff4d8d 55%, #7b5cff);
++}
++
++.buy-btn__title {
++  display: block;
++  font-family: var(--display);
++  font-size: 0.95rem;
++  font-weight: 700;
++}
++
++.buy-btn__cost {
++  display: block;
++  margin-top: 2px;
++  font-size: 0.68rem;
++  opacity: 0.9;
++}
++
++.hint {
++  display: none;
++  margin: 0;
++  text-align: center;
++  font-size: 0.72rem;
++  color: var(--muted);
++  line-height: 1.35;
++}
++
++@media (min-height: 720px) {
++  .hint {
++    display: block;
++  }
++}
++
++.toast {
++  position: fixed;
++  left: 50%;
++  bottom: max(22px, env(safe-area-inset-bottom));
++  transform: translateX(-50%) translateY(120%);
++  padding: 12px 18px;
++  border-radius: 999px;
++  background: rgba(20, 10, 36, 0.94);
++  border: 1px solid rgba(255, 212, 90, 0.5);
++  color: var(--gold);
++  font-family: var(--display);
++  font-size: 1.05rem;
++  z-index: 30;
++  opacity: 0;
++  pointer-events: none;
++}
++
++.overlay {
++  position: fixed;
++  inset: 0;
++  display: grid;
++  place-items: center;
++  padding: 20px;
++  background: rgba(10, 4, 20, 0.72);
++  backdrop-filter: blur(8px);
++  z-index: 40;
++  opacity: 0;
++  pointer-events: none;
++}
++
++.overlay.is-open {
++  opacity: 1;
++  pointer-events: auto;
++}
++
++.overlay__card {
++  width: min(100%, 340px);
++  padding: 24px 20px;
++  border-radius: 22px;
++  background: linear-gradient(160deg, #3a1a5c, #1a0f2e);
++  border: 1px solid rgba(255, 255, 255, 0.14);
++  text-align: center;
++  max-height: min(86dvh, 640px);
++  overflow: auto;
++}
++
++.overlay__card--reward {
++  width: min(100%, 380px);
++  text-align: left;
++}
++
++.overlay__card--reward h2,
++.overlay__card--reward > p,
++.overlay__card--reward .overlay__price {
++  text-align: center;
++}
++
++.reward-pity {
++  margin: -6px 0 10px;
++  text-align: center;
++  font-size: 0.78rem;
++  color: var(--mint);
++}
++
++.reward-pity.is-hidden {
++  display: none;
++}
++
++.reward-bank-line {
++  text-align: center;
++  margin-bottom: 14px;
++  color: var(--muted);
++  font-size: 0.9rem;
++}
++
++.reward-bank-line strong {
++  color: var(--gold);
++  font-family: var(--display);
++  font-size: 1.15rem;
++}
++
++.promo-list {
++  display: grid;
++  gap: 8px;
++  margin-bottom: 14px;
++}
++
++.promo-card {
++  display: grid;
++  grid-template-columns: 1fr auto;
++  gap: 8px;
++  align-items: center;
++  padding: 10px 12px;
++  border-radius: 14px;
++  background: rgba(255, 255, 255, 0.06);
++  border: 1px solid rgba(255, 255, 255, 0.1);
++}
++
++.promo-card__title {
++  font-family: var(--display);
++  font-size: 1.05rem;
++  color: #fff;
++}
++
++.promo-card__meta {
++  display: block;
++  margin-top: 2px;
++  font-size: 0.72rem;
++  color: var(--muted);
++}
++
++.promo-card__btn {
++  appearance: none;
++  border: 0;
++  border-radius: 12px;
++  padding: 10px 12px;
++  font-weight: 800;
++  font-size: 0.78rem;
++  cursor: pointer;
++  color: #4a1400;
++  background: linear-gradient(180deg, #ffe08a, var(--gold-deep));
++  white-space: nowrap;
++}
++
++.promo-card__btn:disabled {
++  opacity: 0.4;
++  cursor: not-allowed;
++  filter: grayscale(0.3);
++}
++
++.promo-code-box {
++  margin-bottom: 14px;
++  padding: 14px;
++  border-radius: 16px;
++  text-align: center;
++  background: linear-gradient(135deg, rgba(255, 77, 141, 0.25), rgba(255, 212, 90, 0.2));
++  border: 1px dashed rgba(255, 212, 90, 0.65);
++}
++
++.promo-code-box.is-hidden {
++  display: none;
++}
++
++.promo-code-box__label {
++  display: block;
++  font-size: 0.72rem;
++  color: var(--muted);
++  margin-bottom: 6px;
++}
++
++.promo-code-box__code {
++  display: block;
++  font-family: var(--display);
++  font-size: 1.35rem;
++  letter-spacing: 0.04em;
++  color: var(--gold);
++  word-break: break-all;
++}
++
++.promo-code-box__hint {
++  display: block;
++  margin: 8px 0 10px;
++  font-size: 0.72rem;
++  color: var(--muted);
++}
++
++.overlay__actions--stack {
++  grid-template-columns: 1fr;
++}
++
++.overlay__card h2 {
++  margin: 0 0 8px;
++  font-family: var(--display);
++  font-size: 1.55rem;
++}
++
++.overlay__card p {
++  margin: 0 0 14px;
++  color: var(--muted);
++}
++
++.overlay__price {
++  font-family: var(--display);
++  font-size: 1.8rem;
++  color: var(--gold);
++  margin-bottom: 16px;
++}
++
++.overlay__actions {
++  display: grid;
++  grid-template-columns: 1fr 1fr;
++  gap: 8px;
++}
++
++.btn {
++  appearance: none;
++  border: 0;
++  border-radius: 14px;
++  padding: 12px 14px;
++  font-family: var(--font);
++  font-weight: 800;
++  cursor: pointer;
++}
++
++.btn--primary {
++  color: #4a1400;
++  background: linear-gradient(180deg, #ffe08a, var(--gold-deep));
++}
++
++.btn--ghost {
++  color: #fff;
++  background: rgba(255, 255, 255, 0.1);
++  border: 1px solid rgba(255, 255, 255, 0.14);
++}
++
++/* Splash extras once full stylesheet loads */
++.splash__candy span {
++  will-change: transform;
++}
++
++@media (prefers-reduced-motion: reduce) {
++  *,
++  *::before,
++  *::after {
++    animation: none !important;
++    transition: none !important;
++  }
++}
++
++/* Auto phone/Samsung/iPhone optimization (class set by detect script) */
++html.is-phone-opt {
++  .cell.is-scatter::before,
++  .cell.mult-tier-1024::before {
++    animation: none !important;
++  }
++
++  .cell.is-scatter .cell__tile,
++  .cell.is-scatter .cell__glyph,
++  .cell.is-scatter::after,
++  .cell.mult-tier-1024,
++  .cell__mult.mult-tier-1024,
++  .cell__mark-dot.is-on {
++    animation: none !important;
++    filter: none !important;
++  }
++
++  .fly-glyph {
++    filter: none;
++    will-change: auto;
++  }
++
++  .vapor {
++    display: none !important;
++  }
++
++  .splash__candy span {
++    will-change: auto;
++    animation-duration: 1.4s;
++  }
++
++  .overlay {
++    backdrop-filter: none;
++  }
++}
++
++html.is-ios .cell__glyph,
++html.is-android .cell__glyph {
++  /* Emoji compositing is cheaper without layered filters */
++  filter: none !important;
++  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
++}
+diff --git a/src/game/symbols.js b/src/game/symbols.js
+new file mode 100644
+index 0000000..fc439e5
+--- /dev/null
++++ b/src/game/symbols.js
+@@ -0,0 +1,187 @@
++/** Pastry symbols for the board — decorative figures only, no real stakes. */
++
++export const SCATTER_ID = 'freespin';
++
++export const SYMBOLS = [
++  { id: 'eclair', label: 'Эклер', glyph: '🥐', tint: '#e8a060', deep: '#b86a2e', weight: 18 },
++  { id: 'pavlova', label: 'Анна Павлова', glyph: '🍨', tint: '#ffe4f0', deep: '#f0a0c0', weight: 16 },
++  { id: 'cake', label: 'Тортик', glyph: '🎂', tint: '#ffb7c5', deep: '#e86b8a', weight: 16 },
++  { id: 'macaron', label: 'Макарон', glyph: '🧁', tint: '#e0b4ff', deep: '#a86be0', weight: 15 },
++  { id: 'tart', label: 'Тарт', glyph: '🥧', tint: '#ffd28a', deep: '#e09a3a', weight: 14 },
++  { id: 'choco', label: 'Шоколад', glyph: '🍫', tint: '#8b5a3c', deep: '#4a2614', weight: 13 },
++  { id: 'berry', label: 'Ягодный', glyph: '🍓', tint: '#ff6b7a', deep: '#c2283a', weight: 8 },
++  // Scatter: 3+ in one spin → free spins (does not form cluster pays)
++  { id: SCATTER_ID, label: 'Free Spin', glyph: '🍭', tint: '#ffe08a', deep: '#ff4d8d', weight: 5, scatter: true },
++];
++
++export const SYMBOL_BY_ID = Object.fromEntries(SYMBOLS.map((s) => [s.id, s]));
++
++export function isScatter(symbolId) {
++  return symbolId === SCATTER_ID;
++}
++
++export function countScatters(symbols) {
++  return symbols.reduce((n, id) => n + (isScatter(id) ? 1 : 0), 0);
++}
++
++/** Base cluster pays (cosmetic points) by size — Sugar Rush style curve. */
++export const CLUSTER_PAY = {
++  eclair:  { 5: 0.2, 6: 0.4, 7: 0.6, 8: 0.8, 9: 1.0, 10: 1.5, 12: 2.0, 15: 5.0 },
++  pavlova: { 5: 0.25, 6: 0.5, 7: 0.75, 8: 1.0, 9: 1.25, 10: 2.0, 12: 2.5, 15: 6.0 },
++  cake:    { 5: 0.3, 6: 0.6, 7: 0.9, 8: 1.2, 9: 1.5, 10: 2.5, 12: 3.0, 15: 8.0 },
++  macaron: { 5: 0.4, 6: 0.8, 7: 1.2, 8: 1.6, 9: 2.0, 10: 3.0, 12: 4.0, 15: 10 },
++  tart:    { 5: 0.5, 6: 1.0, 7: 1.5, 8: 2.0, 9: 2.5, 10: 4.0, 12: 5.0, 15: 12 },
++  choco:   { 5: 0.75, 6: 1.5, 7: 2.0, 8: 3.0, 9: 4.0, 10: 6.0, 12: 8.0, 15: 20 },
++  berry:   { 5: 1.0, 6: 2.0, 7: 3.0, 8: 4.0, 9: 5.0, 10: 8.0, 12: 12, 15: 30 },
++};
++
++export function payForCluster(symbolId, size) {
++  const table = CLUSTER_PAY[symbolId];
++  if (!table) return 0;
++  const keys = Object.keys(table)
++    .map(Number)
++    .sort((a, b) => a - b);
++  let pay = 0;
++  for (const key of keys) {
++    if (size >= key) pay = table[key];
++  }
++  return pay;
++}
++
++function normalizeMood(biasOrOpts = 3) {
++  if (biasOrOpts && typeof biasOrOpts === 'object') return biasOrOpts;
++  const bias = typeof biasOrOpts === 'number' ? biasOrOpts : 3;
++  return { bias, chaosRate: 0.1, luckyId: null, luckyBoost: 1, scatterBoost: 1 };
++}
++
++function weightWithMood(symbol, random, mood) {
++  let w = symbol.weight;
++  if (symbol.scatter) {
++    w *= mood.scatterBoost ?? 1;
++  } else if (mood.luckyId && symbol.id === mood.luckyId) {
++    w *= mood.luckyBoost ?? 1;
++  }
++  // Micro-jitter so identical boards still diverge.
++  w *= 0.82 + random() * 0.4;
++  return w;
++}
++
++export function pickWeightedSymbol(random = Math.random, biasOrOpts = 3) {
++  const mood = normalizeMood(biasOrOpts);
++  const weights = SYMBOLS.map((s) => weightWithMood(s, random, mood));
++  const total = weights.reduce((sum, w) => sum + w, 0);
++  let roll = random() * total;
++  for (let i = 0; i < SYMBOLS.length; i += 1) {
++    roll -= weights[i];
++    if (roll <= 0) return SYMBOLS[i].id;
++  }
++  return SYMBOLS[SYMBOLS.length - 1].id;
++}
++
++/**
++ * Per-wave drop mood: cold / normal / hot cluster pressure + lucky symbol.
++ * Makes each spin and cascade feel less scripted.
++ */
++export function createDropMood(random = Math.random) {
++  const roll = random();
++  let bias;
++  let chaosRate;
++  if (roll < 0.2) {
++    // Cold — more pure random, fewer forced matches
++    bias = 1.35 + random() * 0.9;
++    chaosRate = 0.26 + random() * 0.18;
++  } else if (roll < 0.78) {
++    // Normal — clusters still appear, but not every drop
++    bias = 2.2 + random() * 1.8;
++    chaosRate = 0.08 + random() * 0.14;
++  } else {
++    // Hot — cluster party
++    bias = 4.0 + random() * 2.4;
++    chaosRate = 0.02 + random() * 0.07;
++  }
++
++  const paySymbols = SYMBOLS.filter((s) => !s.scatter);
++  const luckyId = random() < 0.58
++    ? paySymbols[Math.floor(random() * paySymbols.length)].id
++    : null;
++
++  return {
++    bias,
++    chaosRate,
++    luckyId,
++    luckyBoost: 1.7 + random() * 1.6,
++    // Occasional soft scatter surge (still rare overall)
++    scatterBoost: random() < 0.14 ? 1.25 + random() * 0.45 : 1,
++  };
++}
++
++/**
++ * Pick a symbol with neighbour bias — strength and chaos vary per mood.
++ * `biasOrOpts` may be a number (legacy) or a mood from createDropMood().
++ */
++export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random, biasOrOpts = 3) {
++  const mood = normalizeMood(biasOrOpts);
++
++  // Chaos drop: ignore neighbours entirely this cell.
++  if (random() < (mood.chaosRate ?? 0)) {
++    return pickWeightedSymbol(random, mood);
++  }
++
++  const r = Math.floor(index / gridSize);
++  const c = index % gridSize;
++  const neighbourIds = [];
++  const deltas = [
++    [0, -1],
++    [0, 1],
++    [-1, 0],
++    [1, 0],
++    // Diagonals — weaker influence via single push (more spatial variety)
++    [-1, -1],
++    [-1, 1],
++    [1, -1],
++    [1, 1],
++  ];
++  for (let d = 0; d < deltas.length; d += 1) {
++    const [dr, dc] = deltas[d];
++    const nr = r + dr;
++    const nc = c + dc;
++    if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) continue;
++    const id = symbols[nr * gridSize + nc];
++    if (!id) continue;
++    // Cardinals count twice, diagonals once
++    neighbourIds.push(id);
++    if (d < 4) neighbourIds.push(id);
++  }
++
++  // Also peek one cell below (common cascade neighbour).
++  if (r + 1 < gridSize) {
++    const below = symbols[(r + 1) * gridSize + c];
++    if (below) neighbourIds.push(below);
++  }
++
++  if (!neighbourIds.length) return pickWeightedSymbol(random, mood);
++
++  const boost = new Map();
++  for (const id of neighbourIds) {
++    boost.set(id, (boost.get(id) || 0) + 1);
++  }
++
++  // Per-pick bias jitter around the wave mood
++  const bias = Math.max(1, (mood.bias ?? 3) * (0.65 + random() * 0.75));
++
++  const weights = SYMBOLS.map((s) => {
++    let w = weightWithMood(s, random, mood);
++    // Scatters stay free of neighbour clustering bias.
++    if (s.scatter) return w;
++    const hits = boost.get(s.id) || 0;
++    if (hits > 0) w *= bias * hits;
++    return w;
++  });
++  const total = weights.reduce((sum, w) => sum + w, 0);
++  let roll = random() * total;
++  for (let i = 0; i < SYMBOLS.length; i += 1) {
++    roll -= weights[i];
++    if (roll <= 0) return SYMBOLS[i].id;
++  }
++  return SYMBOLS[SYMBOLS.length - 1].id;
++}
+diff --git a/vite.config.js b/vite.config.js
+index 3313ced..da7b983 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -47,6 +47,7 @@ export default defineConfig(({ mode }) => {
+           offer: resolve(__dirname, 'offer.html'),
+           requisites: resolve(__dirname, 'requisites.html'),
+           checkout: resolve(__dirname, 'checkout.html'),
++          game: resolve(__dirname, 'game.html'),
+           // admin.html intentionally omitted from production build
+         },
+       },
+-- 
+2.43.0
+

@@ -1,0 +1,1269 @@
+import gsap from 'gsap';
+import {
+  GRID_SIZE,
+  BUY_BONUS_COST_MULT,
+  BUY_SUPER_COST_MULT,
+  BET_STEPS,
+  START_BALANCE,
+  createGameState,
+  fillEmptyCells,
+  playBaseSpin,
+  playFreeSpin,
+  buyBonus,
+  changeBet,
+  formatVardin,
+  formatVardinShort,
+  multTier,
+} from './engine.js';
+import { SYMBOL_BY_ID, isScatter } from './symbols.js';
+import {
+  PROMO_TIERS,
+  MIN_BONUS_ROUND_POINTS,
+  applyBonusPity,
+  redeemPromo,
+} from './promo.js';
+import {
+  loadUserCache,
+  persistProgress,
+  getTelegramUserName,
+} from './storage.js';
+import './style.scss';
+
+const tg = window.Telegram?.WebApp;
+
+/** Auto-detect iPhone / Samsung / Android / Telegram mobile and tune FX. */
+function detectPerfProfile() {
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const tgPlatform = String(tg?.platform || '').toLowerCase();
+
+  const isIPhone = /iPhone|iPod/i.test(ua);
+  const isIPad =
+    /iPad/i.test(ua) || (platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
+  const isIOS = isIPhone || isIPad || /iOS|CriOS|FxiOS/i.test(ua) || tgPlatform === 'ios';
+  const isAndroid = /Android/i.test(ua) || tgPlatform === 'android';
+  const isSamsung = /SamsungBrowser|SM-|GT-|Galaxy/i.test(ua);
+  const isMobileUA = /Mobile|Android|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const narrow = window.matchMedia('(max-width: 920px)').matches;
+  const shortScreen = Math.min(screen.width || 9999, screen.height || 9999) <= 920;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const saveData = Boolean(navigator.connection?.saveData);
+  const lowMem =
+    typeof navigator.deviceMemory === 'number' && navigator.deviceMemory > 0 && navigator.deviceMemory <= 4;
+  const lowCpu =
+    typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+
+  const isPhone =
+    isIPhone ||
+    isSamsung ||
+    (isAndroid && isMobileUA) ||
+    tgPlatform === 'ios' ||
+    tgPlatform === 'android' ||
+    (coarse && narrow && (isMobileUA || shortScreen));
+
+  const lite = reduce || isPhone || saveData || (coarse && (lowMem || lowCpu));
+
+  return {
+    isIPhone,
+    isIOS,
+    isAndroid,
+    isSamsung,
+    isPhone,
+    lite,
+    reduce,
+    saveData,
+  };
+}
+
+const perf = detectPerfProfile();
+const reduceMotion = perf.reduce;
+/** Lighter cascade/FX path — enabled automatically on phones. */
+const liteFx = perf.lite;
+
+(function applyPerfMode() {
+  const root = document.documentElement;
+  if (perf.lite || perf.isPhone) root.classList.add('is-phone-opt');
+  if (perf.isIOS) root.classList.add('is-ios');
+  if (perf.isAndroid || perf.isSamsung) root.classList.add('is-android');
+  if (perf.isSamsung) root.classList.add('is-samsung');
+  if (perf.lite) root.classList.add('is-lite-fx');
+
+  // Snappier tweens on phones; less work for the main thread.
+  gsap.ticker.lagSmoothing(500, 33);
+  if (liteFx) {
+    gsap.defaults({
+      ease: 'power2.out',
+      overwrite: 'auto',
+    });
+  }
+})();
+
+const els = {
+  board: document.getElementById('board'),
+  fx: document.getElementById('fx-layer'),
+  spins: document.getElementById('stat-spins'),
+  fsBadge: document.getElementById('fs-badge'),
+  balance: document.getElementById('stat-balance'),
+  win: document.getElementById('stat-win'),
+  bet: document.getElementById('stat-bet'),
+  bank: document.getElementById('stat-bank'),
+  walletBtn: document.getElementById('btn-wallet'),
+  spinBtn: document.getElementById('btn-spin'),
+  spinLabel: document.getElementById('spin-label'),
+  betMinus: document.getElementById('btn-bet-minus'),
+  betPlus: document.getElementById('btn-bet-plus'),
+  buyBtn: document.getElementById('btn-buy'),
+  buySuperBtn: document.getElementById('btn-buy-super'),
+  buyCost: document.getElementById('buy-cost'),
+  superCost: document.getElementById('super-cost'),
+  toast: document.getElementById('toast'),
+  status: document.getElementById('status'),
+  winBanner: document.getElementById('win-banner'),
+  winBannerText: document.getElementById('win-banner-text'),
+  fsAward: document.getElementById('fs-award'),
+  fsAwardCard: document.getElementById('fs-award-card'),
+  fsAwardValue: document.getElementById('fs-award-value'),
+  overlay: document.getElementById('overlay'),
+  overlayPoints: document.getElementById('overlay-points'),
+  overlayClose: document.getElementById('overlay-close'),
+  rewardSub: document.getElementById('reward-sub'),
+  rewardPity: document.getElementById('reward-pity'),
+  rewardBankTotal: document.getElementById('reward-bank-total'),
+  promoList: document.getElementById('promo-list'),
+  promoCodeBox: document.getElementById('promo-code-box'),
+  promoCodeValue: document.getElementById('promo-code-value'),
+  promoCopy: document.getElementById('promo-copy'),
+  buyOverlay: document.getElementById('buy-overlay'),
+  buyOverlayTitle: document.getElementById('buy-overlay-title'),
+  buyOverlayText: document.getElementById('buy-overlay-text'),
+  buyOverlayPrice: document.getElementById('buy-overlay-price'),
+  buyCancel: document.getElementById('buy-cancel'),
+  buyConfirm: document.getElementById('buy-confirm'),
+};
+
+let state = createGameState();
+let rewardBank = 0;
+let promoCodes = [];
+let cellNodes = [];
+let animating = false;
+let pendingBuy = null; // 'bonus' | 'super'
+let lastIssuedCode = '';
+
+function saveCache() {
+  persistProgress({
+    rewardBank,
+    balance: state.balance,
+    betIndex: state.betIndex,
+    codes: promoCodes,
+  });
+}
+
+function restoreFromCache() {
+  const cache = loadUserCache();
+  rewardBank = Number(cache.rewardBank) || 0;
+  promoCodes = Array.isArray(cache.codes) ? cache.codes : [];
+  if (cache.balance != null && Number.isFinite(Number(cache.balance))) {
+    state.balance = Number(cache.balance);
+  } else {
+    state.balance = START_BALANCE;
+  }
+  if (cache.betIndex != null && BET_STEPS[cache.betIndex] != null) {
+    state.betIndex = cache.betIndex;
+    state.bet = BET_STEPS[cache.betIndex];
+  }
+}
+
+function initTelegram() {
+  if (!tg) return;
+  tg.ready();
+  tg.expand();
+  try {
+    tg.setHeaderColor('#1a0f2e');
+    tg.setBackgroundColor('#140a24');
+  } catch {
+    /* older clients */
+  }
+}
+
+function cellSize() {
+  const first = cellNodes[0]?.el;
+  return first ? first.getBoundingClientRect().height + 4 : 48;
+}
+
+function clearSymbolClass(el) {
+  [...el.classList]
+    .filter((cls) => cls.startsWith('sym-'))
+    .forEach((cls) => el.classList.remove(cls));
+}
+
+function buildBoard() {
+  els.board.innerHTML = '';
+  cellNodes = [];
+  for (let i = 0; i < GRID_SIZE * GRID_SIZE; i += 1) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.innerHTML = `
+      <div class="cell__tile" aria-hidden="true"></div>
+      <span class="cell__mark-dot" aria-hidden="true"></span>
+      <span class="cell__mult" aria-hidden="true"></span>
+      <span class="cell__glyph" aria-hidden="true"></span>
+    `;
+    els.board.appendChild(cell);
+    cellNodes.push({
+      el: cell,
+      tile: cell.querySelector('.cell__tile'),
+      glyph: cell.querySelector('.cell__glyph'),
+      mult: cell.querySelector('.cell__mult'),
+      mark: cell.querySelector('.cell__mark-dot'),
+    });
+  }
+}
+
+function clearMultTier(el) {
+  [...el.classList]
+    .filter((cls) => cls.startsWith('mult-tier-'))
+    .forEach((cls) => el.classList.remove(cls));
+}
+
+function paintBoard(symbols, multipliers, marks, winning = []) {
+  const winSet = new Set(winning);
+  for (let i = 0; i < cellNodes.length; i += 1) {
+    const node = cellNodes[i];
+    const id = symbols[i];
+    const symbol = SYMBOL_BY_ID[id];
+
+    clearSymbolClass(node.el);
+    clearSymbolClass(node.tile);
+
+    if (symbol) {
+      node.el.classList.add(`sym-${symbol.id}`);
+      node.tile.classList.add(`sym-${symbol.id}`, 'is-filled');
+      node.glyph.textContent = symbol.glyph;
+      node.glyph.classList.add('is-on');
+      node.tile.style.setProperty('--sym-tint', symbol.tint);
+      node.tile.style.setProperty('--sym-deep', symbol.deep);
+    } else {
+      node.tile.classList.remove('is-filled');
+      node.glyph.classList.remove('is-on');
+      node.glyph.textContent = '';
+      node.tile.style.removeProperty('--sym-tint');
+      node.tile.style.removeProperty('--sym-deep');
+    }
+
+    node.el.classList.toggle('is-win', winSet.has(i));
+    node.el.classList.toggle('is-scatter', isScatter(id));
+    node.el.classList.toggle('is-empty', !symbol);
+
+    const m = multipliers[i] || 0;
+    const marked = Boolean(marks[i]);
+    node.el.classList.toggle('is-marked', marked || m > 0);
+
+    clearMultTier(node.mult);
+    clearMultTier(node.el);
+
+    if (m > 0) {
+      node.mult.textContent = `×${m}`;
+      node.mult.classList.add('is-on');
+      node.mark.classList.remove('is-on');
+      const tier = multTier(m);
+      node.mult.classList.add(`mult-tier-${tier}`);
+      node.el.classList.add(`mult-tier-${tier}`);
+    } else {
+      node.mult.textContent = '';
+      node.mult.classList.remove('is-on');
+      node.mark.classList.toggle('is-on', marked);
+    }
+
+    gsap.set(node.tile, { clearProps: 'transform,filter,opacity' });
+    gsap.set(node.glyph, { clearProps: 'transform,filter,opacity' });
+    // Do not clear left/top/right/bottom — badge must stay in the corner
+    gsap.set(node.mult, {
+      clearProps: 'scale,filter,fontSize,opacity,autoAlpha',
+      x: 0,
+      y: 0,
+      xPercent: 0,
+      yPercent: 0,
+    });
+  }
+}
+
+function updateHud() {
+  els.balance.textContent = formatVardinShort(state.balance);
+  els.win.textContent = formatVardinShort(state.lastWin);
+  els.bet.textContent = formatVardinShort(state.bet);
+  if (els.bank) els.bank.textContent = formatVardinShort(rewardBank);
+  els.buyCost.textContent = `${BUY_BONUS_COST_MULT}×`;
+  els.superCost.textContent = `${BUY_SUPER_COST_MULT}×`;
+
+  const inBonus = state.mode === 'bonus' || state.mode === 'super';
+  els.fsBadge.classList.toggle('is-hidden', !inBonus);
+  els.spins.textContent = String(state.spinsLeft);
+  els.spinLabel.textContent = inBonus ? 'FS' : 'SPIN';
+
+  const locked = animating || inBonus;
+  els.betMinus.disabled = locked;
+  els.betPlus.disabled = locked;
+  els.buyBtn.disabled = locked;
+  els.buySuperBtn.disabled = locked;
+  els.spinBtn.disabled = animating;
+}
+
+function renderPromoList() {
+  if (!els.promoList) return;
+  els.promoList.innerHTML = PROMO_TIERS.map((tier) => {
+    const affordable = rewardBank + 1e-9 >= tier.cost;
+    return `
+      <article class="promo-card" data-tier="${tier.id}">
+        <div>
+          <div class="promo-card__title">${tier.title}</div>
+          <span class="promo-card__meta">${tier.hint} · ${formatVardinShort(tier.cost)} баллов</span>
+        </div>
+        <button type="button" class="promo-card__btn" data-redeem="${tier.id}" ${affordable ? '' : 'disabled'}>
+          Обменять
+        </button>
+      </article>
+    `;
+  }).join('');
+
+  els.promoList.querySelectorAll('[data-redeem]').forEach((btn) => {
+    btn.addEventListener('click', () => onRedeem(btn.getAttribute('data-redeem')));
+  });
+}
+
+function showIssuedCode(code) {
+  lastIssuedCode = code;
+  if (!els.promoCodeBox) return;
+  els.promoCodeBox.classList.remove('is-hidden');
+  els.promoCodeValue.textContent = code;
+}
+
+function openRewardOverlay({ roundWin, pity = 0, title = 'Бонус завершён' } = {}) {
+  document.getElementById('reward-title').textContent = title;
+  if (els.rewardSub) {
+    els.rewardSub.textContent = `${getTelegramUserName()}, обменяйте баллы на скидку в домашней кондитерской`;
+  }
+  els.overlayPoints.textContent = `${formatVardinShort(roundWin)} баллов`;
+  if (els.rewardPity) {
+    if (pity > 0) {
+      els.rewardPity.textContent = `Гарантия раунда: +${formatVardinShort(pity)} до промокода 5%`;
+      els.rewardPity.classList.remove('is-hidden');
+    } else {
+      els.rewardPity.classList.add('is-hidden');
+    }
+  }
+  if (els.rewardBankTotal) {
+    els.rewardBankTotal.textContent = formatVardinShort(rewardBank);
+  }
+  if (els.promoCodeBox) els.promoCodeBox.classList.add('is-hidden');
+  renderPromoList();
+  els.overlay.classList.add('is-open');
+}
+
+function onRedeem(tierId) {
+  const result = redeemPromo(rewardBank, tierId);
+  if (!result.ok) {
+    showToast('Недостаточно баллов');
+    return;
+  }
+  rewardBank = result.bankAfter;
+  promoCodes = [
+    {
+      code: result.code,
+      discount: result.tier.discount,
+      tierId: result.tier.id,
+      issuedAt: result.issuedAt,
+    },
+    ...promoCodes,
+  ].slice(0, 30);
+  saveCache();
+  updateHud();
+  renderPromoList();
+  showIssuedCode(result.code);
+  showToast(`Промокод −${result.tier.discount}% готов`);
+  if (els.rewardBankTotal) {
+    els.rewardBankTotal.textContent = formatVardinShort(rewardBank);
+  }
+}
+
+function settleBonusRound(rawRoundWin) {
+  const { credited, pity } = applyBonusPity(rawRoundWin);
+  rewardBank = +(rewardBank + credited).toFixed(2);
+  saveCache();
+  updateHud();
+  openRewardOverlay({ roundWin: credited, pity });
+  els.status.textContent = `Бонус в баллы · от ${MIN_BONUS_ROUND_POINTS} на промокод 5%`;
+}
+
+function setBusy(busy) {
+  animating = busy;
+  state.busy = busy;
+  updateHud();
+}
+
+function wait(ms) {
+  if (reduceMotion) return Promise.resolve();
+  return new Promise((resolve) => gsap.delayedCall(ms / 1000, resolve));
+}
+
+function showToast(text) {
+  els.toast.textContent = text;
+  gsap.killTweensOf(els.toast);
+  gsap.fromTo(
+    els.toast,
+    { y: 90, opacity: 0 },
+    {
+      y: 0,
+      opacity: 1,
+      duration: reduceMotion ? 0.01 : 0.32,
+      ease: 'power3.out',
+      onComplete: () => {
+        gsap.to(els.toast, { delay: 1.15, y: 70, opacity: 0, duration: 0.28 });
+      },
+    },
+  );
+}
+
+function cellCenterInFx(cellIndex) {
+  const rect = cellNodes[cellIndex].el.getBoundingClientRect();
+  const boardRect = els.fx.getBoundingClientRect();
+  return {
+    x: rect.left - boardRect.left + rect.width / 2,
+    y: rect.top - boardRect.top + rect.height / 2,
+    w: rect.width,
+    h: rect.height,
+  };
+}
+
+function spawnFxNode(className, x, y) {
+  const node = document.createElement('div');
+  node.className = className;
+  node.style.left = `${x}px`;
+  node.style.top = `${y}px`;
+  els.fx.appendChild(node);
+  return node;
+}
+
+/** Flying candy tile that matches a board symbol position. */
+function spawnFlyTile(cellIndex, symbolId) {
+  const { x, y, w } = cellCenterInFx(cellIndex);
+  const symbol = SYMBOL_BY_ID[symbolId];
+  const fly = spawnFxNode('fly-glyph', x, y);
+  const sizePx = Math.max(28, Math.round(w * 0.9));
+  fly.style.width = `${sizePx}px`;
+  fly.style.setProperty('--fly-size', `${sizePx}px`);
+  if (symbol) {
+    fly.classList.add(`sym-${symbol.id}`);
+    fly.style.setProperty('--sym-tint', symbol.tint);
+    fly.style.setProperty('--sym-deep', symbol.deep);
+    // Art span stays above tile gloss (::after)
+    fly.innerHTML = `<span class="fly-glyph__art">${symbol.glyph}</span>`;
+  }
+  gsap.set(fly, { x: 0, y: 0, xPercent: -50, yPercent: -50 });
+  return fly;
+}
+
+function hideTile(node) {
+  if (!node?.tile) return;
+  node.tile.classList.remove('is-filled');
+  node.glyph.textContent = '';
+  node.glyph.classList.remove('is-on');
+  gsap.set([node.tile, node.glyph], { clearProps: 'transform,filter,opacity' });
+}
+
+function revealTile(node) {
+  if (!node?.tile) return;
+  node.tile.classList.add('is-filled');
+  if (node.glyph.textContent) node.glyph.classList.add('is-on');
+  gsap.set([node.tile, node.glyph], { clearProps: 'opacity,transform,filter' });
+}
+
+function burstShockwave(cellIndex) {
+  if (reduceMotion) return;
+  const { x, y } = cellCenterInFx(cellIndex);
+  const wave = spawnFxNode('shockwave', x, y);
+  gsap.fromTo(
+    wave,
+    { scale: 0.35, opacity: 0.95 },
+    {
+      scale: 3.2,
+      opacity: 0,
+      duration: 0.55,
+      ease: 'power2.out',
+      onComplete: () => wave.remove(),
+    },
+  );
+}
+
+function burstSparks(cellIndex, count = 12) {
+  if (reduceMotion) return;
+  const { x, y } = cellCenterInFx(cellIndex);
+
+  for (let i = 0; i < count; i += 1) {
+    const isGlow = i % 3 === 0;
+    const spark = spawnFxNode(isGlow ? 'spark spark--glow' : 'spark spark--crumb', x, y);
+    const angle = (Math.PI * 2 * i) / count + gsap.utils.random(-0.2, 0.2);
+    const dist = gsap.utils.random(isGlow ? 22 : 16, isGlow ? 48 : 40);
+    gsap.fromTo(
+      spark,
+      { scale: isGlow ? 0.6 : 1, opacity: 1, rotation: 0 },
+      {
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist + gsap.utils.random(4, 18),
+        opacity: 0,
+        scale: 0,
+        rotation: gsap.utils.random(-180, 180),
+        duration: gsap.utils.random(0.45, 0.7),
+        ease: 'power3.out',
+        onComplete: () => spark.remove(),
+      },
+    );
+  }
+}
+
+function boardFlash() {
+  if (reduceMotion) return;
+  let flash = els.fx.querySelector('.fx-flash');
+  if (!flash) {
+    flash = document.createElement('div');
+    flash.className = 'fx-flash';
+    els.fx.appendChild(flash);
+  }
+  gsap.fromTo(
+    flash,
+    { opacity: 0.55 },
+    { opacity: 0, duration: 0.45, ease: 'power2.out' },
+  );
+}
+
+function clusterCenterInFx(cells) {
+  if (!cells?.length) {
+    const board = els.fx.getBoundingClientRect();
+    return { x: board.width / 2, y: board.height * 0.42 };
+  }
+  let sx = 0;
+  let sy = 0;
+  for (const i of cells) {
+    const p = cellCenterInFx(i);
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / cells.length, y: sy / cells.length };
+}
+
+/** Soft vapor wisps rising from a cell (not an explosion). */
+function puffVapor(cellIndex, count = 5) {
+  if (reduceMotion || liteFx) return;
+  const { x, y } = cellCenterInFx(cellIndex);
+  for (let i = 0; i < count; i += 1) {
+    const mist = spawnFxNode('vapor', x, y);
+    const driftX = gsap.utils.random(-14, 14);
+    gsap.fromTo(
+      mist,
+      {
+        x: gsap.utils.random(-6, 6),
+        y: gsap.utils.random(-4, 6),
+        xPercent: -50,
+        yPercent: -50,
+        scale: gsap.utils.random(0.55, 1),
+        opacity: gsap.utils.random(0.35, 0.7),
+      },
+      {
+        x: driftX,
+        y: gsap.utils.random(-36, -18),
+        scale: gsap.utils.random(1.2, 1.8),
+        opacity: 0,
+        duration: gsap.utils.random(0.35, 0.55),
+        ease: 'power1.out',
+        onComplete: () => mist.remove(),
+      },
+    );
+  }
+}
+
+/** Winning tiles dissolve / evaporate in place — no outward blast. */
+async function explodeCells(winningCells) {
+  if (reduceMotion) {
+    winningCells.forEach((i) => hideTile(cellNodes[i]));
+    return;
+  }
+
+  const winTiles = winningCells.map((i) => cellNodes[i].tile);
+  const winGlyphs = winningCells.map((i) => cellNodes[i].glyph);
+
+  winningCells.forEach((i) => cellNodes[i].el.classList.add('is-vanishing'));
+
+  // Opacity + scale only (no blur/filter — those stall emoji on phones)
+  const dur = liteFx ? 0.22 : 0.34;
+  await gsap
+    .timeline()
+    .to([winTiles, winGlyphs], {
+      y: liteFx ? -6 : -10,
+      scale: 0.55,
+      opacity: 0,
+      duration: dur,
+      ease: 'power2.in',
+      stagger: { each: liteFx ? 0.008 : 0.014, from: 'center' },
+    });
+
+  winningCells.forEach((i) => {
+    if (!liteFx) puffVapor(i, 3);
+    hideTile(cellNodes[i]);
+    cellNodes[i].el.classList.remove('is-vanishing');
+    gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
+      clearProps: 'transform,filter,opacity',
+    });
+  });
+}
+
+/** Win sum floats near the cluster centre where pieces just vanished. */
+function floatWin(amount, atCells = []) {
+  if (!amount) return;
+  const { x, y } = clusterCenterInFx(atCells);
+  const node = document.createElement('div');
+  node.className = 'float-num';
+  node.textContent = `+${formatVardinShort(amount)}`;
+  node.style.left = `${x}px`;
+  node.style.top = `${y}px`;
+  els.fx.appendChild(node);
+  gsap.fromTo(
+    node,
+    { xPercent: -50, yPercent: -50, y: 8, opacity: 0, scale: 0.75 },
+    {
+      y: -36,
+      opacity: 1,
+      scale: 1.12,
+      duration: reduceMotion ? 0.01 : 0.65,
+      ease: 'power3.out',
+      onComplete: () => {
+        gsap.to(node, {
+          opacity: 0,
+          y: -56,
+          duration: 0.38,
+          onComplete: () => node.remove(),
+        });
+      },
+    },
+  );
+}
+
+function winTierFor(amount) {
+  const x = amount / Math.max(1, state.bet);
+  if (x >= 50) return 'EPIC';
+  if (x >= 20) return 'MEGA';
+  if (x >= 8) return 'BIG';
+  return '';
+}
+
+async function showWinBanner(amount) {
+  if (!amount) return;
+  const tier = winTierFor(amount);
+  const tierEl = document.getElementById('win-banner-tier');
+  els.winBanner.classList.remove('is-hidden', 'is-big', 'is-mega', 'is-epic');
+  if (tier === 'BIG') els.winBanner.classList.add('is-big');
+  if (tier === 'MEGA') els.winBanner.classList.add('is-mega');
+  if (tier === 'EPIC') els.winBanner.classList.add('is-epic');
+  if (tierEl) tierEl.textContent = tier;
+  els.winBannerText.textContent = formatVardinShort(amount);
+  await gsap.fromTo(
+    els.winBanner,
+    { opacity: 0, scale: 0.7 },
+    { opacity: 1, scale: 1, duration: reduceMotion ? 0.01 : 0.5, ease: 'back.out(1.6)' },
+  );
+  await wait(tier ? 1100 : 850);
+  await gsap.to(els.winBanner, {
+    opacity: 0,
+    scale: 1.08,
+    duration: reduceMotion ? 0.01 : 0.35,
+  });
+  els.winBanner.classList.add('is-hidden');
+}
+
+/** Big center celebration when Free Spins are awarded (+5 etc.). */
+async function showFreeSpinsAward(amount = 5) {
+  if (!els.fsAward || !amount) return;
+
+  els.fsAward.classList.remove('is-hidden');
+  els.fsAwardValue.textContent = `+${amount}`;
+  gsap.set(els.fsAward, { opacity: 1 });
+  gsap.set(els.fsAwardCard, { scale: 0.55, rotation: -8, opacity: 0 });
+
+  if (tg?.HapticFeedback) {
+    try {
+      tg.HapticFeedback.notificationOccurred('success');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Confetti sparks around the card
+  if (!reduceMotion) {
+    const rect = els.fsAwardCard.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    for (let i = 0; i < 18; i += 1) {
+      const spark = document.createElement('div');
+      spark.className = 'fs-award__spark';
+      spark.style.left = `${cx}px`;
+      spark.style.top = `${cy}px`;
+      spark.style.position = 'fixed';
+      spark.style.zIndex = '51';
+      document.body.appendChild(spark);
+      const angle = (Math.PI * 2 * i) / 18;
+      const dist = gsap.utils.random(60, 130);
+      gsap.to(spark, {
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        opacity: 0,
+        scale: 0,
+        duration: 0.85,
+        ease: 'power2.out',
+        onComplete: () => spark.remove(),
+      });
+    }
+  }
+
+  await gsap
+    .timeline()
+    .to(els.fsAwardCard, {
+      scale: 1.08,
+      rotation: 0,
+      opacity: 1,
+      duration: reduceMotion ? 0.01 : 0.45,
+      ease: 'back.out(1.8)',
+    })
+    .to(els.fsAwardCard, {
+      scale: 1,
+      duration: reduceMotion ? 0.01 : 0.18,
+      ease: 'power2.out',
+    })
+    .to(els.fsAwardValue, {
+      scale: 1.15,
+      duration: reduceMotion ? 0.01 : 0.22,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power1.inOut',
+    });
+
+  await wait(1100);
+
+  await gsap.to(els.fsAward, {
+    opacity: 0,
+    duration: reduceMotion ? 0.01 : 0.35,
+    ease: 'power2.in',
+  });
+  els.fsAward.classList.add('is-hidden');
+  gsap.set(els.fsAwardCard, { clearProps: 'transform,opacity' });
+}
+
+/** Initial fill: candy tiles fall from above the board into each cell. */
+function animateDropIn(symbols, multipliers, marks) {
+  paintBoard(symbols, multipliers, marks, []);
+  if (reduceMotion) return Promise.resolve();
+
+  // Mobile: animate real tiles (no 49 fly clones) so icons stay sharp.
+  if (liteFx) {
+    const tiles = [];
+    const glyphs = [];
+    cellNodes.forEach((n, i) => {
+      if (!symbols[i]) return;
+      tiles.push(n.tile);
+      glyphs.push(n.glyph);
+    });
+    gsap.set([...tiles, ...glyphs], { opacity: 0, y: -18, scale: 0.92 });
+    return gsap.to([...tiles, ...glyphs], {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.28,
+      ease: 'power2.out',
+      stagger: { each: 0.012, from: 'start' },
+      onComplete: () => {
+        gsap.set([...tiles, ...glyphs], { clearProps: 'opacity,transform' });
+      },
+    });
+  }
+
+  const size = cellSize();
+  cellNodes.forEach((n) => {
+    gsap.set([n.tile, n.glyph], { opacity: 0 });
+  });
+
+  const tl = gsap.timeline({
+    onComplete: () => {
+      cellNodes.forEach((n) => {
+        gsap.set([n.tile, n.glyph], { clearProps: 'opacity,transform,filter' });
+      });
+    },
+  });
+
+  let t = 0;
+  for (let c = 0; c < GRID_SIZE; c += 1) {
+    for (let r = 0; r < GRID_SIZE; r += 1) {
+      const i = r * GRID_SIZE + c;
+      const id = symbols[i];
+      if (!id) continue;
+      const fly = spawnFlyTile(i, id);
+      const startY = -(r + 2.2) * size;
+
+      tl.fromTo(
+        fly,
+        { x: 0, y: startY, opacity: 1, scale: 0.92 },
+        {
+          x: 0,
+          y: 0,
+          scale: 1,
+          duration: 0.4 + r * 0.015,
+          ease: 'power2.out',
+          onComplete: () => {
+            gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
+              opacity: 1,
+              clearProps: 'opacity',
+            });
+            fly.remove();
+          },
+        },
+        t,
+      );
+      t += 0.028;
+    }
+  }
+  return tl;
+}
+
+async function animateUpgrades(upgrades) {
+  const changed = (upgrades || []).filter(
+    (up) => up.before.mult !== up.after.mult || up.before.marked !== up.after.marked,
+  );
+  if (!changed.length) return;
+
+  const tl = gsap.timeline();
+  const pulseEls = [];
+  for (const up of changed) {
+    const node = cellNodes[up.cell];
+    const m = up.after.mult;
+    node.el.classList.add('is-marked');
+    clearMultTier(node.mult);
+    clearMultTier(node.el);
+
+    // Always pin badge to the cell corner — never re-center on multiply.
+    gsap.set([node.mult, node.mark], {
+      x: 0,
+      y: 0,
+      xPercent: 0,
+      yPercent: 0,
+      left: 'auto',
+      top: 'auto',
+      right: 1,
+      bottom: 1,
+      transformOrigin: '100% 100%',
+    });
+
+    if (m > 0) {
+      node.mult.textContent = `×${m}`;
+      node.mult.classList.add('is-on');
+      node.mark.classList.remove('is-on');
+      const tier = multTier(m);
+      node.mult.classList.add(`mult-tier-${tier}`);
+      node.el.classList.add(`mult-tier-${tier}`);
+      pulseEls.push(node.mult);
+    } else if (up.after.marked) {
+      node.mult.classList.remove('is-on');
+      node.mult.textContent = '';
+      node.mark.classList.add('is-on');
+      pulseEls.push(node.mark);
+    }
+
+    if (!reduceMotion) {
+      const el = pulseEls[pulseEls.length - 1];
+      tl.fromTo(
+        el,
+        { autoAlpha: 0.55, scale: 0.75 },
+        {
+          autoAlpha: 1,
+          scale: 1,
+          duration: 0.32,
+          ease: 'back.out(1.6)',
+          // Keep GSAP from inventing a center translate
+          x: 0,
+          y: 0,
+          xPercent: 0,
+          yPercent: 0,
+        },
+        '<0.03',
+      );
+    }
+  }
+  if (!reduceMotion) await tl;
+  // Clear only scale/filter — leave corner anchors intact
+  gsap.set(pulseEls, {
+    clearProps: 'scale,filter,opacity,autoAlpha',
+    x: 0,
+    y: 0,
+    xPercent: 0,
+    yPercent: 0,
+  });
+}
+
+/**
+ * True cascade:
+ * 1) board with holes after explode
+ * 2) pieces above fall down into empty slots
+ * 3) new pieces fall from above the board into remaining holes
+ */
+async function animateCascadeFalls(step) {
+  const size = cellSize();
+  const afterExplode = step.symbolsAfterExplode || step.symbolsBefore.map((s, i) =>
+    step.winningCells.includes(i) ? null : s,
+  );
+
+  paintBoard(afterExplode, step.multipliersAfter, step.marksAfter, []);
+
+  if (reduceMotion || liteFx) {
+    // Fast path: paint gravity + drops immediately, short pop-in for new icons
+    paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+    if (liteFx && !reduceMotion) {
+      const dropNodes = (step.newDropCells || []).flatMap((i) => [
+        cellNodes[i].tile,
+        cellNodes[i].glyph,
+      ]);
+      if (dropNodes.length) {
+        gsap.fromTo(
+          dropNodes,
+          { opacity: 0, y: -14, scale: 0.9 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.22,
+            ease: 'power2.out',
+            stagger: 0.01,
+            onComplete: () => gsap.set(dropNodes, { clearProps: 'opacity,transform' }),
+          },
+        );
+        await wait(240);
+      }
+    }
+    return;
+  }
+
+  const moves = step.moves || [];
+  if (moves.length) {
+    for (const move of moves) {
+      hideTile(cellNodes[move.from]);
+    }
+
+    const slideTl = gsap.timeline();
+    moves.forEach((move, order) => {
+      const from = cellCenterInFx(move.from);
+      const to = cellCenterInFx(move.to);
+      const fly = spawnFlyTile(move.from, move.id);
+      const col = move.to % GRID_SIZE;
+      const start = col * 0.015 + order * 0.006;
+
+      slideTl.to(
+        fly,
+        {
+          x: to.x - from.x,
+          y: to.y - from.y,
+          duration: 0.26 + move.rows * 0.06,
+          ease: 'power3.in',
+          onComplete: () => fly.remove(),
+        },
+        start,
+      );
+    });
+    await slideTl;
+  }
+
+  paintBoard(step.symbolsAfterGravity, step.multipliersAfter, step.marksAfter, []);
+
+  const drops = step.newDropCells || [];
+  if (!drops.length) {
+    paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+    return;
+  }
+
+  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+  for (const i of drops) {
+    gsap.set([cellNodes[i].tile, cellNodes[i].glyph], { opacity: 0 });
+  }
+
+  const dropTl = gsap.timeline();
+  let t = 0;
+  for (let c = 0; c < GRID_SIZE; c += 1) {
+    const colDrops = drops
+      .filter((i) => i % GRID_SIZE === c)
+      .sort((a, b) => a - b);
+    colDrops.forEach((i, orderInCol) => {
+      const id = step.symbolsAfter[i];
+      const fly = spawnFlyTile(i, id);
+      const rowsFall = Math.max(2, step.fallDistance[i] || 2);
+      const startY = -(rowsFall + 1.2) * size;
+
+      dropTl.fromTo(
+        fly,
+        { x: 0, y: startY, opacity: 1, scale: 0.92 },
+        {
+          x: 0,
+          y: 0,
+          scale: 1,
+          duration: 0.32 + orderInCol * 0.03,
+          ease: 'power2.out',
+          onComplete: () => {
+            revealTile(cellNodes[i]);
+            fly.remove();
+          },
+        },
+        t,
+      );
+      t += 0.04;
+    });
+  }
+
+  await dropTl;
+  gsap.set(
+    cellNodes.flatMap((n) => [n.tile, n.glyph]),
+    { clearProps: 'transform,opacity,filter' },
+  );
+  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+}
+
+async function animateStep(step) {
+  paintBoard(step.symbolsBefore, step.multipliersBefore, step.marksBefore, step.winningCells);
+
+  if (tg?.HapticFeedback) {
+    try {
+      tg.HapticFeedback.impactOccurred('light');
+    } catch {
+      /* ignore */
+    }
+  }
+  // Sum appears as pieces evaporate, roughly over the cluster centre
+  floatWin(step.stepWin, step.winningCells);
+  await explodeCells(step.winningCells);
+
+  for (const i of step.winningCells) {
+    cellNodes[i].el.classList.remove('is-win', 'is-exploding', 'is-vanishing');
+    gsap.set(cellNodes[i].tile, { clearProps: 'transform,filter,opacity' });
+    gsap.set(cellNodes[i].glyph, { clearProps: 'transform,filter,opacity' });
+  }
+
+  await animateUpgrades(step.upgrades);
+  await wait(liteFx ? 40 : 100);
+  await animateCascadeFalls(step);
+  await wait(liteFx ? 60 : 140);
+}
+
+async function runResult(result) {
+  await animateDropIn(result.opening.symbols, result.opening.multipliers, result.opening.marks);
+
+  for (const step of result.steps) {
+    await animateStep(step);
+  }
+
+  if (result.spinWin > 0) {
+    await showWinBanner(result.spinWin);
+  }
+
+  paintBoard(result.symbols, result.multipliers, result.marks, []);
+  state.lastWin = result.spinWin;
+  updateHud();
+}
+
+async function onSpin() {
+  if (animating) return;
+
+  if (state.mode === 'bonus' || state.mode === 'super') {
+    setBusy(true);
+    els.status.textContent = 'Free Spins — липкие множители';
+    const result = playFreeSpin(state);
+    if (!result.ok) {
+      setBusy(false);
+      return;
+    }
+    await runResult(result);
+    if (result.retrigger) {
+      await showFreeSpinsAward(result.retrigger);
+      showToast(`🍭 ×${result.scatterCount} → +${result.retrigger} FREE SPINS`);
+    }
+    if (result.done) {
+      fillEmptyCells(state);
+      paintBoard(state.symbols, state.multipliers, state.marks, []);
+      settleBonusRound(result.totalBonusWin);
+    } else {
+      saveCache();
+    }
+    setBusy(false);
+    return;
+  }
+
+  setBusy(true);
+  const result = playBaseSpin(state);
+  if (!result.ok) {
+    showToast(result.reason === 'funds' ? 'Недостаточно Вардин' : 'Подождите…');
+    setBusy(false);
+    return;
+  }
+  els.status.textContent = 'Каскад…';
+  await runResult(result);
+  saveCache();
+  if (result.triggeredBonus) {
+    await showFreeSpinsAward(result.awardedSpins || 10);
+    showToast(`🍭 ×${result.scatterCount} → ${result.awardedSpins} FREE SPINS`);
+    els.status.textContent = 'Free Spins · sticky множители · 🍭×3 = +5';
+    updateHud();
+    paintBoard(state.symbols, state.multipliers, state.marks, []);
+  } else {
+    els.status.textContent =
+      result.spinWin > 0
+        ? `Выигрыш ${formatVardin(result.spinWin)}`
+        : 'Как Sugar Rush 1000: метка → ×2 → ×4… · 🍭3+=FS · баллы→промокод';
+  }
+  setBusy(false);
+}
+
+function openBuy(kind) {
+  if (animating || state.mode !== 'base') return;
+  pendingBuy = kind;
+  const mult = kind === 'super' ? BUY_SUPER_COST_MULT : BUY_BONUS_COST_MULT;
+  const cost = state.bet * mult;
+  els.buyOverlayTitle.textContent = kind === 'super' ? 'SUPER FREE SPINS' : 'BUY FREE SPINS';
+  els.buyOverlayText.textContent =
+    kind === 'super'
+      ? '10 фриспинов · все клетки сразу ×2, липкие множители'
+      : '10 фриспинов · чистые sticky-spots: метка → ×2 → ×4…';
+  els.buyOverlayPrice.textContent = formatVardin(cost);
+  els.buyOverlay.classList.add('is-open');
+}
+
+function confirmBuy() {
+  if (!pendingBuy) return;
+  const result = buyBonus(state, { superBonus: pendingBuy === 'super' });
+  els.buyOverlay.classList.remove('is-open');
+  pendingBuy = null;
+  if (!result.ok) {
+    showToast(result.reason === 'funds' ? 'Недостаточно Вардин' : 'Сейчас нельзя');
+    return;
+  }
+  paintBoard(result.symbols, result.multipliers, result.marks, []);
+  updateHud();
+  saveCache();
+  showToast(result.mode === 'super' ? 'SUPER BONUS!' : 'FREE SPINS!');
+  els.status.textContent = 'Нажмите SPIN / FS для фриспина';
+}
+
+function bind() {
+  els.spinBtn.addEventListener('click', onSpin);
+  els.betMinus.addEventListener('click', () => {
+    if (animating || state.mode !== 'base') return;
+    changeBet(state, -1);
+    updateHud();
+    saveCache();
+  });
+  els.betPlus.addEventListener('click', () => {
+    if (animating || state.mode !== 'base') return;
+    changeBet(state, 1);
+    updateHud();
+    saveCache();
+  });
+  els.buyBtn.addEventListener('click', () => openBuy('bonus'));
+  els.buySuperBtn.addEventListener('click', () => openBuy('super'));
+  els.buyCancel.addEventListener('click', () => {
+    pendingBuy = null;
+    els.buyOverlay.classList.remove('is-open');
+  });
+  els.buyConfirm.addEventListener('click', confirmBuy);
+  els.overlayClose.addEventListener('click', () => {
+    els.overlay.classList.remove('is-open');
+    updateHud();
+    saveCache();
+  });
+  els.walletBtn?.addEventListener('click', () => {
+    openRewardOverlay({
+      roundWin: rewardBank,
+      pity: 0,
+      title: 'Баллы и промокоды',
+    });
+    if (els.overlayPoints) {
+      els.overlayPoints.textContent = `${formatVardinShort(rewardBank)} баллов`;
+    }
+    if (promoCodes[0]) showIssuedCode(promoCodes[0].code);
+  });
+  els.promoCopy?.addEventListener('click', async () => {
+    const code = lastIssuedCode || promoCodes[0]?.code;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      showToast('Промокод скопирован');
+    } catch {
+      showToast(code);
+    }
+  });
+}
+
+function setSplashProgress(pct) {
+  const bar = document.getElementById('splash-bar');
+  const label = document.getElementById('splash-pct');
+  const value = Math.max(0, Math.min(100, Math.round(pct)));
+  if (bar) bar.style.width = `${value}%`;
+  if (label) label.textContent = `${value}%`;
+}
+
+async function hideSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  splash.classList.add('is-done');
+  if (reduceMotion) {
+    splash.remove();
+    return;
+  }
+  await gsap.to(splash, {
+    autoAlpha: 0,
+    scale: 1.04,
+    duration: 0.55,
+    ease: 'power2.inOut',
+  });
+  splash.remove();
+}
+
+async function boot() {
+  setSplashProgress(12);
+  initTelegram();
+  setSplashProgress(28);
+
+  restoreFromCache();
+  setSplashProgress(42);
+
+  buildBoard();
+  setSplashProgress(60);
+
+  fillEmptyCells(state);
+  paintBoard(state.symbols, state.multipliers, state.marks, []);
+  setSplashProgress(78);
+
+  bind();
+  updateHud();
+  saveCache();
+  const deviceTag = perf.isIPhone
+    ? 'iPhone'
+    : perf.isSamsung
+      ? 'Samsung'
+      : perf.isAndroid
+        ? 'Android'
+        : perf.isPhone
+          ? 'mobile'
+          : 'desktop';
+  els.status.textContent = perf.lite
+    ? `${getTelegramUserName()} · режим ${deviceTag} · быстрые анимации`
+    : `С возвращением, ${getTelegramUserName()} · sticky × · 🍭FS · баллы→скидка`;
+  setSplashProgress(100);
+  await wait(liteFx ? 80 : 160);
+  await hideSplash();
+
+  if (!reduceMotion && !liteFx) {
+    gsap.from('.slot', { opacity: 0, y: 12, duration: 0.35, ease: 'power2.out' });
+  }
+}
+
+boot();
