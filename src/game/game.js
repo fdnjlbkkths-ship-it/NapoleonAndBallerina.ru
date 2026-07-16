@@ -137,11 +137,10 @@ function buildBoard() {
     const cell = document.createElement('div');
     cell.className = 'cell';
     cell.innerHTML = `
+      <div class="cell__tile" aria-hidden="true"></div>
       <span class="cell__mark-dot" aria-hidden="true"></span>
-      <div class="cell__tile" aria-hidden="true">
-        <span class="cell__glyph"></span>
-      </div>
       <span class="cell__mult" aria-hidden="true"></span>
+      <span class="cell__glyph" aria-hidden="true"></span>
     `;
     els.board.appendChild(cell);
     cellNodes.push({
@@ -174,10 +173,12 @@ function paintBoard(symbols, multipliers, marks, winning = []) {
       node.el.classList.add(`sym-${symbol.id}`);
       node.tile.classList.add(`sym-${symbol.id}`, 'is-filled');
       node.glyph.textContent = symbol.glyph;
+      node.glyph.classList.add('is-on');
       node.tile.style.setProperty('--sym-tint', symbol.tint);
       node.tile.style.setProperty('--sym-deep', symbol.deep);
     } else {
       node.tile.classList.remove('is-filled');
+      node.glyph.classList.remove('is-on');
       node.glyph.textContent = '';
       node.tile.style.removeProperty('--sym-tint');
       node.tile.style.removeProperty('--sym-deep');
@@ -381,7 +382,8 @@ function spawnFlyTile(cellIndex, symbolId) {
     fly.classList.add(`sym-${symbol.id}`);
     fly.style.setProperty('--sym-tint', symbol.tint);
     fly.style.setProperty('--sym-deep', symbol.deep);
-    fly.textContent = symbol.glyph;
+    // Art span stays above tile gloss (::after)
+    fly.innerHTML = `<span class="fly-glyph__art">${symbol.glyph}</span>`;
   }
   gsap.set(fly, { x: 0, y: 0, xPercent: -50, yPercent: -50 });
   return fly;
@@ -391,12 +393,14 @@ function hideTile(node) {
   if (!node?.tile) return;
   node.tile.classList.remove('is-filled');
   node.glyph.textContent = '';
-  gsap.set(node.tile, { clearProps: 'transform,filter,opacity' });
+  node.glyph.classList.remove('is-on');
+  gsap.set([node.tile, node.glyph], { clearProps: 'transform,filter,opacity' });
 }
 
 function revealTile(node) {
   if (!node?.tile) return;
   node.tile.classList.add('is-filled');
+  if (node.glyph.textContent) node.glyph.classList.add('is-on');
   gsap.set([node.tile, node.glyph], { clearProps: 'opacity,transform,filter' });
 }
 
@@ -466,8 +470,9 @@ async function explodeCells(winningCells) {
   }
 
   const winTiles = winningCells.map((i) => cellNodes[i].tile);
+  const winGlyphs = winningCells.map((i) => cellNodes[i].glyph);
 
-  // 1) Anticipation on tiles only — cell boxes stay fixed size
+  // 1) Anticipation on tiles + glyphs — cell boxes stay fixed size
   await gsap
     .timeline()
     .to(winTiles, {
@@ -476,13 +481,26 @@ async function explodeCells(winningCells) {
       duration: 0.26,
       ease: 'power2.out',
       stagger: { each: 0.02, from: 'center' },
-    })
+    }, 0)
+    .to(winGlyphs, {
+      scale: 1.18,
+      filter: 'brightness(1.35) saturate(1.25)',
+      duration: 0.26,
+      ease: 'power2.out',
+      stagger: { each: 0.02, from: 'center' },
+    }, 0)
     .to(winTiles, {
       scaleX: 1.2,
       scaleY: 0.84,
       duration: 0.14,
       ease: 'power2.in',
-    });
+    })
+    .to(winGlyphs, {
+      scaleX: 1.22,
+      scaleY: 0.86,
+      duration: 0.14,
+      ease: 'power2.in',
+    }, '<');
 
   boardFlash();
 
@@ -669,14 +687,16 @@ function animateDropIn(symbols, multipliers, marks) {
   if (reduceMotion) return Promise.resolve();
 
   const size = cellSize();
-  // Hide tiles — fly clones fall into place.
+  // Hide tiles + glyphs — fly clones fall into place.
   cellNodes.forEach((n) => {
-    gsap.set(n.tile, { opacity: 0 });
+    gsap.set([n.tile, n.glyph], { opacity: 0 });
   });
 
   const tl = gsap.timeline({
     onComplete: () => {
-      cellNodes.forEach((n) => gsap.set(n.tile, { clearProps: 'opacity,transform,filter' }));
+      cellNodes.forEach((n) => {
+        gsap.set([n.tile, n.glyph], { clearProps: 'opacity,transform,filter' });
+      });
     },
   });
 
@@ -699,7 +719,10 @@ function animateDropIn(symbols, multipliers, marks) {
           duration: 0.52 + r * 0.02,
           ease: 'bounce.out',
           onComplete: () => {
-            gsap.set(cellNodes[i].tile, { opacity: 1, clearProps: 'opacity' });
+            gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
+              opacity: 1,
+              clearProps: 'opacity',
+            });
             fly.remove();
           },
         },
@@ -815,10 +838,10 @@ async function animateCascadeFalls(step) {
     return;
   }
 
-  // Pre-paint final symbols into DOM but keep tiles invisible until each lands.
+  // Pre-paint final symbols into DOM but keep tiles/glyphs invisible until each lands.
   paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
   for (const i of drops) {
-    gsap.set(cellNodes[i].tile, { opacity: 0 });
+    gsap.set([cellNodes[i].tile, cellNodes[i].glyph], { opacity: 0 });
   }
 
   const dropTl = gsap.timeline();
@@ -856,7 +879,7 @@ async function animateCascadeFalls(step) {
 
   await dropTl;
   gsap.set(
-    cellNodes.map((n) => n.tile),
+    cellNodes.flatMap((n) => [n.tile, n.glyph]),
     { clearProps: 'transform,opacity,filter' },
   );
   paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);

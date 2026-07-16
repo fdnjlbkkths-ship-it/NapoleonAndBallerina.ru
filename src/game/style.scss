@@ -333,14 +333,24 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
+/* Fruit / pastry art — always above tile, mark, and multiplier */
 .cell__glyph {
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  z-index: 5;
   font-size: clamp(1.05rem, 4.8vw, 1.45rem);
   line-height: 1;
+  opacity: 0;
+  pointer-events: none;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.28));
   will-change: transform, opacity, filter;
   transform-origin: 50% 50%;
+}
+
+.cell__glyph.is-on {
+  opacity: 1;
 }
 
 .cell__mult {
@@ -348,7 +358,7 @@ body {
   left: 50%;
   top: 50%;
   translate: -50% -50%;
-  /* Sugar-spot disc — same height for all tiers */
+  /* Sugar-spot disc — sits under the pastry/fruit glyph */
   height: 1.35rem;
   min-width: 1.35rem;
   width: max-content;
@@ -532,7 +542,7 @@ body {
   position: absolute;
   top: 3px;
   left: 4px;
-  z-index: 3;
+  z-index: 6;
   font-family: var(--display);
   font-size: 0.55rem;
   font-weight: 700;
@@ -564,14 +574,8 @@ body {
   opacity: 0.92;
 }
 
-.cell.is-scatter .cell__glyph,
-.cell.is-scatter .cell__mult,
-.cell.is-scatter .cell__mark-dot {
-  z-index: 2;
-}
-
 .cell.is-scatter .cell__glyph {
-  position: relative;
+  z-index: 5;
   animation: fs-glyph-dance 1.1s ease-in-out infinite;
   filter:
     drop-shadow(0 0 6px rgba(255, 212, 90, 0.95))
@@ -699,6 +703,17 @@ body {
   z-index: 6;
 }
 
+.fly-glyph::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.2), transparent 42%);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .fly-glyph::after {
   content: "";
   position: absolute;
@@ -710,6 +725,14 @@ body {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
   transform: rotate(-28deg);
   pointer-events: none;
+  z-index: 0;
+}
+
+.fly-glyph__art {
+  position: relative;
+  z-index: 2;
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.28));
 }
 
 .fly-glyph.sym-freespin {
