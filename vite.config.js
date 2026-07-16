@@ -7,6 +7,8 @@ const base = process.env.VITE_BASE || '/';
 export default defineConfig({
   base,
   build: {
+    // Keep game.js self-contained for GitHub Pages (no extra chunk imports).
+    modulePreload: { polyfill: false },
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
