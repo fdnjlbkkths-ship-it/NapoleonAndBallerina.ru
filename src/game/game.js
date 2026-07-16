@@ -159,17 +159,28 @@ function paintBoard(symbols, multipliers, marks, winning = []) {
     node.glyph.textContent = symbol ? symbol.glyph : '';
     node.el.classList.toggle('is-win', winSet.has(i));
     node.el.classList.toggle('is-scatter', isScatter(symbols[i]));
-    const m = multipliers[i] || 2;
-    node.el.classList.add('is-marked');
-    node.mark.classList.remove('is-on');
-    node.mult.textContent = `×${m}`;
-    node.mult.classList.add('is-on');
+
+    const m = multipliers[i] || 0;
+    const marked = Boolean(marks[i]);
+    node.el.classList.toggle('is-marked', marked || m > 0);
+
     clearMultTier(node.mult);
     clearMultTier(node.el);
-    const tier = multTier(m);
-    node.mult.classList.add(`mult-tier-${tier}`);
-    node.el.classList.add(`mult-tier-${tier}`);
-    gsap.set(node.mult, { scale: 1, clearProps: 'transform,filter,fontSize' });
+
+    if (m > 0) {
+      node.mult.textContent = `×${m}`;
+      node.mult.classList.add('is-on');
+      node.mark.classList.remove('is-on');
+      const tier = multTier(m);
+      node.mult.classList.add(`mult-tier-${tier}`);
+      node.el.classList.add(`mult-tier-${tier}`);
+    } else {
+      node.mult.textContent = '';
+      node.mult.classList.remove('is-on');
+      node.mark.classList.toggle('is-on', marked);
+    }
+
+    gsap.set(node.mult, { clearProps: 'transform,filter,fontSize' });
   }
 }
 
@@ -178,8 +189,8 @@ function updateHud() {
   els.win.textContent = formatVardinShort(state.lastWin);
   els.bet.textContent = formatVardinShort(state.bet);
   if (els.bank) els.bank.textContent = formatVardinShort(rewardBank);
-  els.buyCost.textContent = `${BUY_BONUS_COST_MULT}× · ${formatVardin(state.bet * BUY_BONUS_COST_MULT)}`;
-  els.superCost.textContent = `${BUY_SUPER_COST_MULT}× · ${formatVardin(state.bet * BUY_SUPER_COST_MULT)}`;
+  els.buyCost.textContent = `${BUY_BONUS_COST_MULT}×`;
+  els.superCost.textContent = `${BUY_SUPER_COST_MULT}×`;
 
   const inBonus = state.mode === 'bonus' || state.mode === 'super';
   els.fsBadge.classList.toggle('is-hidden', !inBonus);
@@ -491,16 +502,30 @@ function floatWin(amount) {
   );
 }
 
+function winTierFor(amount) {
+  const x = amount / Math.max(1, state.bet);
+  if (x >= 50) return 'EPIC';
+  if (x >= 20) return 'MEGA';
+  if (x >= 8) return 'BIG';
+  return '';
+}
+
 async function showWinBanner(amount) {
   if (!amount) return;
-  els.winBanner.classList.remove('is-hidden');
+  const tier = winTierFor(amount);
+  const tierEl = document.getElementById('win-banner-tier');
+  els.winBanner.classList.remove('is-hidden', 'is-big', 'is-mega', 'is-epic');
+  if (tier === 'BIG') els.winBanner.classList.add('is-big');
+  if (tier === 'MEGA') els.winBanner.classList.add('is-mega');
+  if (tier === 'EPIC') els.winBanner.classList.add('is-epic');
+  if (tierEl) tierEl.textContent = tier;
   els.winBannerText.textContent = formatVardinShort(amount);
   await gsap.fromTo(
     els.winBanner,
     { opacity: 0, scale: 0.7 },
     { opacity: 1, scale: 1, duration: reduceMotion ? 0.01 : 0.5, ease: 'back.out(1.6)' },
   );
-  await wait(900);
+  await wait(tier ? 1100 : 850);
   await gsap.to(els.winBanner, {
     opacity: 0,
     scale: 1.08,
@@ -638,37 +663,45 @@ function animateDropIn(symbols, multipliers, marks) {
 
 async function animateUpgrades(upgrades) {
   const tl = gsap.timeline();
-  const multEls = [];
+  const pulseEls = [];
   for (const up of upgrades) {
     const node = cellNodes[up.cell];
     const m = up.after.mult;
-    node.mult.textContent = `×${m}`;
-    node.mult.classList.add('is-on');
+    node.el.classList.add('is-marked');
     clearMultTier(node.mult);
     clearMultTier(node.el);
-    const tier = multTier(m);
-    node.mult.classList.add(`mult-tier-${tier}`);
-    node.el.classList.add(`mult-tier-${tier}`);
-    // Always lock final size to ×2 badge (no leftover GSAP scale).
-    gsap.set(node.mult, { scale: 1, clearProps: 'fontSize,lineHeight,width,height' });
-    multEls.push(node.mult);
+
+    if (m > 0) {
+      node.mult.textContent = `×${m}`;
+      node.mult.classList.add('is-on');
+      node.mark.classList.remove('is-on');
+      const tier = multTier(m);
+      node.mult.classList.add(`mult-tier-${tier}`);
+      node.el.classList.add(`mult-tier-${tier}`);
+      pulseEls.push(node.mult);
+    } else if (up.after.marked) {
+      node.mult.classList.remove('is-on');
+      node.mult.textContent = '';
+      node.mark.classList.add('is-on');
+      pulseEls.push(node.mark);
+    }
+
     if (!reduceMotion) {
-      // Pulse via brightness only — size stays identical to ×2.
       tl.fromTo(
-        node.mult,
-        { autoAlpha: 0.55, filter: 'brightness(1.6)' },
+        pulseEls[pulseEls.length - 1],
+        { autoAlpha: 0.4, scale: 0.7 },
         {
           autoAlpha: 1,
-          filter: 'brightness(1)',
-          duration: 0.32,
-          ease: 'power2.out',
+          scale: 1,
+          duration: 0.34,
+          ease: 'back.out(1.8)',
         },
         '<0.03',
       );
     }
   }
   if (!reduceMotion) await tl;
-  gsap.set(multEls, { scale: 1, clearProps: 'transform,filter' });
+  gsap.set(pulseEls, { clearProps: 'transform,filter' });
 }
 
 /**
@@ -716,8 +749,8 @@ async function animateCascadeFalls(step) {
         {
           x: to.x - from.x,
           y: to.y - from.y,
-          duration: 0.28 + move.rows * 0.07,
-          ease: 'power2.in',
+          duration: 0.34 + move.rows * 0.09,
+          ease: 'power3.in',
           onComplete: () => fly.remove(),
         },
         start,
@@ -867,16 +900,16 @@ async function onSpin() {
   await runResult(result);
   saveCache();
   if (result.triggeredBonus) {
-    await showFreeSpinsAward(10);
-    showToast('🍭 ×3+ бонус открыт!');
-    els.status.textContent = 'Бонус открыт · 3 Free Spin за спин дают +5';
+    await showFreeSpinsAward(result.awardedSpins || 10);
+    showToast(`🍭 ×${result.scatterCount} → ${result.awardedSpins} FREE SPINS`);
+    els.status.textContent = 'Free Spins · sticky множители · 🍭×3 = +5';
     updateHud();
     paintBoard(state.symbols, state.multipliers, state.marks, []);
   } else {
     els.status.textContent =
       result.spinWin > 0
         ? `Выигрыш ${formatVardin(result.spinWin)}`
-        : 'Баллы с бонуса → промокод на скидку · 🍭×3 = +5 FS';
+        : 'Как Sugar Rush 1000: метка → ×2 → ×4… · 🍭3+=FS · баллы→промокод';
   }
   setBusy(false);
 }
@@ -889,8 +922,8 @@ function openBuy(kind) {
   els.buyOverlayTitle.textContent = kind === 'super' ? 'SUPER FREE SPINS' : 'BUY FREE SPINS';
   els.buyOverlayText.textContent =
     kind === 'super'
-      ? '10 фриспинов · все клетки ×2, при взрыве удваиваются и липнут'
-      : '10 фриспинов · все клетки ×2, при взрыве удваиваются и липнут';
+      ? '10 фриспинов · все клетки сразу ×2, липкие множители'
+      : '10 фриспинов · чистые sticky-spots: метка → ×2 → ×4…';
   els.buyOverlayPrice.textContent = formatVardin(cost);
   els.buyOverlay.classList.add('is-open');
 }
@@ -1008,7 +1041,7 @@ async function boot() {
   updateHud();
   saveCache();
   els.status.textContent =
-    `С возвращением, ${getTelegramUserName()} · баллы копите на промокод от 5%`;
+    `С возвращением, ${getTelegramUserName()} · sticky × · 🍭FS · баллы→скидка`;
   setSplashProgress(92);
   await wait(180);
 

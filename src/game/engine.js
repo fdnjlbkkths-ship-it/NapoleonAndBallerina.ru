@@ -1,9 +1,12 @@
 /**
- * Sugar Rush–style engine (demo, currency: Вардин 1:1 ₽).
+ * Sugar Rush 1000–style engine (demo, currency: Вардин 1:1 ₽).
  *
- * All cells start at ×2. When a cluster of 5+ explodes, each hit cell
- * doubles: ×2 → ×4 → ×8 → … → ×1024. Colour tier follows the value.
- * Base: reset to all ×2 after a spin. Free spins: sticky.
+ * Official multiplier spots:
+ * 1) first explode on a cell → mark
+ * 2) second explode → ×2
+ * 3) further explodes → ×4 … ×1024
+ * Base: marks reset after each spin. Free spins: sticky.
+ * Super Free Spins: every cell starts at ×2.
  */
 
 import {
@@ -75,11 +78,20 @@ export function fillAllMultipliers(value = 2) {
   return createEmptyGrid(value);
 }
 
+export function freeSpinsForScatters(count) {
+  if (count >= 7) return 30;
+  if (count >= 6) return 20;
+  if (count >= 5) return 15;
+  if (count >= 4) return 12;
+  if (count >= 3) return 10;
+  return 0;
+}
+
 export function createGameState(seedRandom = Math.random) {
   return {
     symbols: createEmptyGrid(null),
-    multipliers: fillAllMultipliers(2),
-    marks: createEmptyGrid(true),
+    multipliers: createEmptyGrid(0),
+    marks: createEmptyGrid(false),
     balance: START_BALANCE,
     bet: 100,
     betIndex: BET_STEPS.indexOf(100),
@@ -164,22 +176,34 @@ export function findClusters(symbols) {
 }
 
 /**
- * On exploded cells: double multiplier (×2 → ×4 → ×8 …).
+ * Official spots: mark → ×2 → ×4 → … → ×1024 on each explode.
  */
 export function applyExplodeMarks(state, winningCells) {
   const upgrades = [];
   const unique = [...new Set(winningCells)];
 
   for (const cell of unique) {
-    const beforeMult = state.multipliers[cell] || 2;
-    const afterMult = nextMultiplier(beforeMult);
-    state.multipliers[cell] = afterMult;
-    state.marks[cell] = true;
+    const before = {
+      marked: Boolean(state.marks[cell]),
+      mult: state.multipliers[cell] || 0,
+    };
+
+    if (state.multipliers[cell] > 0) {
+      state.multipliers[cell] = nextMultiplier(state.multipliers[cell]);
+      state.marks[cell] = true;
+    } else if (state.marks[cell]) {
+      state.multipliers[cell] = MULT_LADDER[0];
+    } else {
+      state.marks[cell] = true;
+    }
 
     upgrades.push({
       cell,
-      before: { marked: true, mult: beforeMult },
-      after: { marked: true, mult: afterMult },
+      before,
+      after: {
+        marked: Boolean(state.marks[cell]),
+        mult: state.multipliers[cell] || 0,
+      },
     });
   }
 
@@ -315,8 +339,8 @@ export function resolveTumbleStep(state) {
 
 function resetMarksIfBase(state) {
   if (state.mode === 'base') {
-    state.marks = createEmptyGrid(true);
-    state.multipliers = fillAllMultipliers(2);
+    state.marks = createEmptyGrid(false);
+    state.multipliers = createEmptyGrid(0);
   }
 }
 
@@ -373,13 +397,14 @@ export function playBaseSpin(state) {
   state.lastWin = spinWin;
   state.balance = +(state.balance + spinWin).toFixed(2);
 
-  // 3+ Free Spin scatters in base → enter bonus with 10 FS.
+  // 3+ scatters in base → Free Spins (10–30 like Sugar Rush 1000).
   let triggeredBonus = false;
+  let awardedSpins = 0;
   if (scatterCount >= SCATTER_RETRIGGER_NEED) {
-    startBonus(state, { superBonus: false });
+    awardedSpins = freeSpinsForScatters(scatterCount);
+    startBonus(state, { superBonus: false, spins: awardedSpins });
     triggeredBonus = true;
   } else {
-    // Base: clear marks after spin sequence ends.
     resetMarksIfBase(state);
   }
 
@@ -390,6 +415,7 @@ export function playBaseSpin(state) {
     spinWin,
     scatterCount,
     triggeredBonus,
+    awardedSpins,
     balance: state.balance,
     multipliers: [...state.multipliers],
     marks: [...state.marks],
@@ -397,16 +423,22 @@ export function playBaseSpin(state) {
   };
 }
 
-function startBonus(state, { superBonus = false } = {}) {
+function startBonus(state, { superBonus = false, spins = FREE_SPINS_START } = {}) {
   state.mode = superBonus ? 'super' : 'bonus';
-  state.spinsLeft = FREE_SPINS_START;
+  state.spinsLeft = spins;
   state.totalBonusWin = 0;
   state.finishedBonus = false;
   state.lastWin = 0;
 
-  // BUY and SUPER BUY: every cell starts at ×2 (sticky, doubles on each explode).
-  state.multipliers = fillAllMultipliers(2);
-  state.marks = createEmptyGrid(true);
+  if (superBonus) {
+    // Super Free Spins: every cell preloaded with ×2 (sticky).
+    state.multipliers = fillAllMultipliers(2);
+    state.marks = createEmptyGrid(true);
+  } else {
+    // Regular Free Spins: clean sticky spots (build during the round).
+    state.multipliers = createEmptyGrid(0);
+    state.marks = createEmptyGrid(false);
+  }
 
   state.symbols = createEmptyGrid(null);
   fillEmptyCells(state);
@@ -468,8 +500,8 @@ export function playFreeSpin(state) {
   if (done) {
     state.finishedBonus = true;
     state.mode = 'base';
-    state.marks = createEmptyGrid(true);
-    state.multipliers = fillAllMultipliers(2);
+    state.marks = createEmptyGrid(false);
+    state.multipliers = createEmptyGrid(0);
   }
 
   return {

@@ -14,6 +14,7 @@ import {
   playFreeSpin,
   nextMultiplier,
   multTier,
+  freeSpinsForScatters,
 } from './engine.js';
 import { pickBiasedSymbol, countScatters, SCATTER_ID, isScatter } from './symbols.js';
 
@@ -36,20 +37,24 @@ function seeded(seed = 1) {
   assert.equal(findClusters(symbols).length, 0);
 }
 
-// All cells start at ×2; each explode doubles
+// Official: mark → ×2 → ×4 → ×8
 {
   const state = createGameState(seeded(1));
-  assert.ok(state.multipliers.every((m) => m === 2));
-
   const cell = 10;
+  assert.equal(state.multipliers[cell], 0);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.marks[cell], true);
+  assert.equal(state.multipliers[cell], 0);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.multipliers[cell], 2);
+
   applyExplodeMarks(state, [cell]);
   assert.equal(state.multipliers[cell], 4);
 
   applyExplodeMarks(state, [cell]);
   assert.equal(state.multipliers[cell], 8);
-
-  applyExplodeMarks(state, [cell]);
-  assert.equal(state.multipliers[cell], 16);
 }
 
 {
@@ -57,8 +62,9 @@ function seeded(seed = 1) {
   assert.equal(nextMultiplier(1024), 1024);
   assert.equal(MULT_LADDER.at(-1), 1024);
   assert.equal(multTier(2), 2);
-  assert.equal(multTier(32), 32);
-  assert.equal(multTier(1024), 1024);
+  assert.equal(freeSpinsForScatters(3), 10);
+  assert.equal(freeSpinsForScatters(5), 15);
+  assert.equal(freeSpinsForScatters(7), 30);
 }
 
 {
@@ -71,14 +77,25 @@ function seeded(seed = 1) {
 }
 
 {
+  const state = createGameState(seeded(22));
+  state.bet = 100;
+  const bought = buyBonus(state, { superBonus: false });
+  assert.equal(bought.ok, true);
+  assert.equal(state.mode, 'bonus');
+  assert.ok(state.multipliers.every((m) => m === 0));
+  assert.ok(state.marks.every((m) => m === false));
+}
+
+{
   const state = createGameState(seeded(99));
   state.symbols = Array(GRID_SIZE * GRID_SIZE).fill('berry');
   const step = resolveTumbleStep(state);
   assert.ok(step);
   assert.ok(step.stepWin > 0);
-  // Every exploded cell went ×2 → ×4
+  // First explode only marks
   for (const cell of step.winningCells) {
-    assert.equal(step.multipliersAfter[cell], 4);
+    assert.equal(step.multipliersAfter[cell], 0);
+    assert.equal(step.marksAfter[cell], true);
   }
 }
 
@@ -87,19 +104,17 @@ function seeded(seed = 1) {
   fillEmptyCells(state);
   const spin = playBaseSpin(state);
   assert.equal(spin.ok, true);
-  // Base resets to all ×2 after spin
-  assert.ok(state.multipliers.every((m) => m === 2));
+  if (!spin.triggeredBonus) {
+    assert.ok(state.multipliers.every((m) => m === 0));
+  }
 }
 
 {
   const state = createGameState(seeded(11));
   state.bet = 100;
-  const bought = buyBonus(state, { superBonus: false });
-  assert.equal(bought.ok, true);
-  assert.equal(state.mode, 'bonus');
-  assert.ok(state.multipliers.every((m) => m === 2));
-
+  buyBonus(state, { superBonus: false });
   state.multipliers[0] = 8;
+  state.marks[0] = true;
   const fs = playFreeSpin(state);
   assert.equal(fs.ok, true);
   assert.equal(state.mode, 'bonus');
@@ -108,9 +123,8 @@ function seeded(seed = 1) {
 
 {
   assert.ok(MATCH_BIAS >= 3);
-  // Biased picker should favour the neighbour id far more often than uniform.
   const board = Array(GRID_SIZE * GRID_SIZE).fill(null);
-  board[1] = 'cake'; // neighbour of index 0
+  board[1] = 'cake';
   let cake = 0;
   const n = 2000;
   for (let i = 0; i < n; i += 1) {
@@ -126,7 +140,6 @@ function seeded(seed = 1) {
   board[3] = SCATTER_ID;
   board[8] = SCATTER_ID;
   assert.equal(countScatters(board), 3);
-  // Scatters do not form paying clusters
   assert.equal(findClusters(board).every((c) => c.symbolId !== SCATTER_ID), true);
 }
 
