@@ -11,6 +11,7 @@ import {
   changeBet,
   formatVardin,
   formatVardinShort,
+  multTier,
 } from './engine.js';
 import { SYMBOL_BY_ID } from './symbols.js';
 import './style.scss';
@@ -92,6 +93,12 @@ function buildBoard() {
   }
 }
 
+function clearMultTier(el) {
+  [...el.classList]
+    .filter((cls) => cls.startsWith('mult-tier-'))
+    .forEach((cls) => el.classList.remove(cls));
+}
+
 function paintBoard(symbols, multipliers, marks, winning = []) {
   const winSet = new Set(winning);
   for (let i = 0; i < cellNodes.length; i += 1) {
@@ -99,18 +106,16 @@ function paintBoard(symbols, multipliers, marks, winning = []) {
     const symbol = SYMBOL_BY_ID[symbols[i]];
     node.glyph.textContent = symbol ? symbol.glyph : '';
     node.el.classList.toggle('is-win', winSet.has(i));
-    const marked = Boolean(marks[i]);
-    const m = multipliers[i] || 0;
-    node.el.classList.toggle('is-marked', marked || m > 0);
-    if (m > 0) {
-      node.mult.textContent = `×${m}`;
-      node.mult.classList.add('is-on');
-      node.mark.classList.remove('is-on');
-    } else {
-      node.mult.textContent = '';
-      node.mult.classList.remove('is-on');
-      node.mark.classList.toggle('is-on', marked);
-    }
+    const m = multipliers[i] || 2;
+    node.el.classList.add('is-marked');
+    node.mark.classList.remove('is-on');
+    node.mult.textContent = `×${m}`;
+    node.mult.classList.add('is-on');
+    clearMultTier(node.mult);
+    clearMultTier(node.el);
+    const tier = multTier(m);
+    node.mult.classList.add(`mult-tier-${tier}`);
+    node.el.classList.add(`mult-tier-${tier}`);
   }
 }
 
@@ -257,35 +262,27 @@ function animateDropIn(symbols, multipliers, marks) {
 }
 
 async function animateUpgrades(upgrades) {
-  if (reduceMotion) {
-    return;
-  }
   const tl = gsap.timeline();
   for (const up of upgrades) {
     const node = cellNodes[up.cell];
-    if (up.after.mult > 0) {
-      node.mult.textContent = `×${up.after.mult}`;
-      node.mult.classList.add('is-on');
-      node.mark.classList.remove('is-on');
-      node.el.classList.add('is-marked');
+    const m = up.after.mult;
+    node.mult.textContent = `×${m}`;
+    node.mult.classList.add('is-on');
+    clearMultTier(node.mult);
+    clearMultTier(node.el);
+    const tier = multTier(m);
+    node.mult.classList.add(`mult-tier-${tier}`);
+    node.el.classList.add(`mult-tier-${tier}`);
+    if (!reduceMotion) {
       tl.fromTo(
         node.mult,
-        { scale: 0.4, opacity: 0 },
-        { scale: 1.15, opacity: 0.95, duration: 0.22, ease: 'back.out(2)', yoyo: true, repeat: 1 },
+        { scale: 0.55, opacity: 0.5 },
+        { scale: 1.2, opacity: 1, duration: 0.22, ease: 'back.out(2.2)', yoyo: true, repeat: 1 },
         '<0.02',
-      );
-    } else if (up.after.marked) {
-      node.mark.classList.add('is-on');
-      node.el.classList.add('is-marked');
-      tl.fromTo(
-        node.mark,
-        { scale: 0, opacity: 0 },
-        { scale: 1.4, opacity: 1, duration: 0.18, ease: 'back.out(2)' },
-        '<0.015',
       );
     }
   }
-  await tl;
+  if (!reduceMotion) await tl;
 }
 
 async function animateStep(step) {
@@ -409,7 +406,7 @@ async function onSpin() {
   els.status.textContent =
     result.spinWin > 0
       ? `Выигрыш ${formatVardin(result.spinWin)}`
-      : 'Кластер 5+ · взрыв ставит метку, повтор → ×2 → ×4…';
+      : 'Все клетки ×2 · взрыв кластера удваивает множитель на этих полях';
   setBusy(false);
 }
 
@@ -421,8 +418,8 @@ function openBuy(kind) {
   els.buyOverlayTitle.textContent = kind === 'super' ? 'SUPER FREE SPINS' : 'BUY FREE SPINS';
   els.buyOverlayText.textContent =
     kind === 'super'
-      ? '10 фриспинов · поле уже с множителями (центр ×16)'
-      : '10 фриспинов · липкие множители с чистого поля';
+      ? '10 фриспинов · поле с усиленными множителями (центр ×16)'
+      : '10 фриспинов · все клетки ×2, при взрыве удваиваются и липнут';
   els.buyOverlayPrice.textContent = formatVardin(cost);
   els.buyOverlay.classList.add('is-open');
 }
@@ -474,7 +471,7 @@ function boot() {
   paintBoard(state.symbols, state.multipliers, state.marks, []);
   bind();
   updateHud();
-  els.status.textContent = 'Кластер 5+ · взрыв → метка → ×2 → ×4 → ×8… · 1 Вардин = 1 ₽';
+  els.status.textContent = 'Все клетки ×2 · кластер 5+ удваивает множитель и меняет цвет · 1 Вардин = 1 ₽';
 }
 
 boot();

@@ -1,12 +1,9 @@
 /**
- * Sugar Rush 1000–style engine (demo, currency: Вардин 1:1 ₽).
+ * Sugar Rush–style engine (demo, currency: Вардин 1:1 ₽).
  *
- * Multiplier spots (original rules):
- * 1) first explode on a cell → mark
- * 2) second explode → ×2
- * 3) each further explode → ×4, ×8, ×16 … ×1024
- * Cluster win uses sum of multipliers on its cells (min 1×).
- * Base game: marks reset after spin. Free spins: sticky.
+ * All cells start at ×2. When a cluster of 5+ explodes, each hit cell
+ * doubles: ×2 → ×4 → ×8 → … → ×1024. Colour tier follows the value.
+ * Base: reset to all ×2 after a spin. Free spins: sticky.
  */
 
 import { payForCluster, pickWeightedSymbol } from './symbols.js';
@@ -65,11 +62,15 @@ export function buildSuperMultiplierGrid() {
   return grid;
 }
 
+export function fillAllMultipliers(value = 2) {
+  return createEmptyGrid(value);
+}
+
 export function createGameState(seedRandom = Math.random) {
   return {
     symbols: createEmptyGrid(null),
-    multipliers: createEmptyGrid(0),
-    marks: createEmptyGrid(false),
+    multipliers: fillAllMultipliers(2),
+    marks: createEmptyGrid(true),
     balance: START_BALANCE,
     bet: 100,
     betIndex: BET_STEPS.indexOf(100),
@@ -81,6 +82,21 @@ export function createGameState(seedRandom = Math.random) {
     finishedBonus: false,
     random: seedRandom,
   };
+}
+
+/** CSS tier key for multiplier colour (×2 … ×1024). */
+export function multTier(value) {
+  const v = value || 2;
+  if (v >= 1024) return 1024;
+  if (v >= 512) return 512;
+  if (v >= 256) return 256;
+  if (v >= 128) return 128;
+  if (v >= 64) return 64;
+  if (v >= 32) return 32;
+  if (v >= 16) return 16;
+  if (v >= 8) return 8;
+  if (v >= 4) return 4;
+  return 2;
 }
 
 export function fillEmptyCells(state) {
@@ -127,35 +143,22 @@ export function findClusters(symbols) {
 }
 
 /**
- * Apply Sugar Rush mark → ×2 → ×4… on exploded cells.
- * Returns per-cell upgrade info for animation.
+ * On exploded cells: double multiplier (×2 → ×4 → ×8 …).
  */
 export function applyExplodeMarks(state, winningCells) {
   const upgrades = [];
   const unique = [...new Set(winningCells)];
 
   for (const cell of unique) {
-    const before = {
-      marked: state.marks[cell],
-      mult: state.multipliers[cell] || 0,
-    };
-
-    if (state.multipliers[cell] > 0) {
-      state.multipliers[cell] = nextMultiplier(state.multipliers[cell]);
-      state.marks[cell] = true;
-    } else if (state.marks[cell]) {
-      state.multipliers[cell] = MULT_LADDER[0]; // ×2
-    } else {
-      state.marks[cell] = true;
-    }
+    const beforeMult = state.multipliers[cell] || 2;
+    const afterMult = nextMultiplier(beforeMult);
+    state.multipliers[cell] = afterMult;
+    state.marks[cell] = true;
 
     upgrades.push({
       cell,
-      before,
-      after: {
-        marked: state.marks[cell],
-        mult: state.multipliers[cell] || 0,
-      },
+      before: { marked: true, mult: beforeMult },
+      after: { marked: true, mult: afterMult },
     });
   }
 
@@ -264,8 +267,8 @@ export function resolveTumbleStep(state) {
 
 function resetMarksIfBase(state) {
   if (state.mode === 'base') {
-    state.marks = createEmptyGrid(false);
-    state.multipliers = createEmptyGrid(0);
+    state.marks = createEmptyGrid(true);
+    state.multipliers = fillAllMultipliers(2);
   }
 }
 
@@ -345,8 +348,9 @@ function startBonus(state, { superBonus = false } = {}) {
     state.multipliers = buildSuperMultiplierGrid();
     state.marks = state.multipliers.map((m) => m > 0);
   } else {
-    state.multipliers = createEmptyGrid(0);
-    state.marks = createEmptyGrid(false);
+    // Regular bonus: every cell starts at ×2 (sticky, doubles on each explode).
+    state.multipliers = fillAllMultipliers(2);
+    state.marks = createEmptyGrid(true);
   }
 
   state.symbols = createEmptyGrid(null);
@@ -409,8 +413,8 @@ export function playFreeSpin(state) {
   if (done) {
     state.finishedBonus = true;
     state.mode = 'base';
-    state.marks = createEmptyGrid(false);
-    state.multipliers = createEmptyGrid(0);
+    state.marks = createEmptyGrid(true);
+    state.multipliers = fillAllMultipliers(2);
   }
 
   return {
