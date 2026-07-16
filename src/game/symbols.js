@@ -48,21 +48,85 @@ export function payForCluster(symbolId, size) {
   return pay;
 }
 
-export function pickWeightedSymbol(random = Math.random) {
-  const total = SYMBOLS.reduce((sum, s) => sum + s.weight, 0);
+function normalizeMood(biasOrOpts = 3) {
+  if (biasOrOpts && typeof biasOrOpts === 'object') return biasOrOpts;
+  const bias = typeof biasOrOpts === 'number' ? biasOrOpts : 3;
+  return { bias, chaosRate: 0.1, luckyId: null, luckyBoost: 1, scatterBoost: 1 };
+}
+
+function weightWithMood(symbol, random, mood) {
+  let w = symbol.weight;
+  if (symbol.scatter) {
+    w *= mood.scatterBoost ?? 1;
+  } else if (mood.luckyId && symbol.id === mood.luckyId) {
+    w *= mood.luckyBoost ?? 1;
+  }
+  // Micro-jitter so identical boards still diverge.
+  w *= 0.82 + random() * 0.4;
+  return w;
+}
+
+export function pickWeightedSymbol(random = Math.random, biasOrOpts = 3) {
+  const mood = normalizeMood(biasOrOpts);
+  const weights = SYMBOLS.map((s) => weightWithMood(s, random, mood));
+  const total = weights.reduce((sum, w) => sum + w, 0);
   let roll = random() * total;
-  for (const symbol of SYMBOLS) {
-    roll -= symbol.weight;
-    if (roll <= 0) return symbol.id;
+  for (let i = 0; i < SYMBOLS.length; i += 1) {
+    roll -= weights[i];
+    if (roll <= 0) return SYMBOLS[i].id;
   }
   return SYMBOLS[SYMBOLS.length - 1].id;
 }
 
 /**
- * Pick a symbol with ~3× bias toward neighbours already on the board
- * so matching clusters form much more often.
+ * Per-wave drop mood: cold / normal / hot cluster pressure + lucky symbol.
+ * Makes each spin and cascade feel less scripted.
  */
-export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random, bias = 3) {
+export function createDropMood(random = Math.random) {
+  const roll = random();
+  let bias;
+  let chaosRate;
+  if (roll < 0.2) {
+    // Cold — more pure random, fewer forced matches
+    bias = 1.35 + random() * 0.9;
+    chaosRate = 0.26 + random() * 0.18;
+  } else if (roll < 0.78) {
+    // Normal — clusters still appear, but not every drop
+    bias = 2.2 + random() * 1.8;
+    chaosRate = 0.08 + random() * 0.14;
+  } else {
+    // Hot — cluster party
+    bias = 4.0 + random() * 2.4;
+    chaosRate = 0.02 + random() * 0.07;
+  }
+
+  const paySymbols = SYMBOLS.filter((s) => !s.scatter);
+  const luckyId = random() < 0.58
+    ? paySymbols[Math.floor(random() * paySymbols.length)].id
+    : null;
+
+  return {
+    bias,
+    chaosRate,
+    luckyId,
+    luckyBoost: 1.7 + random() * 1.6,
+    // Occasional soft scatter surge (still rare overall)
+    scatterBoost: random() < 0.14 ? 1.25 + random() * 0.45 : 1,
+  };
+}
+
+/**
+ * Pick a symbol with neighbour bias — strength and chaos vary per mood.
+ * `biasOrOpts` may be a number (legacy) or a mood from createDropMood().
+ */
+export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random, biasOrOpts = 3) {
+  const mood = normalizeMood(biasOrOpts);
+
+  // Chaos drop: ignore neighbours entirely this cell.
+  if (random() < (mood.chaosRate ?? 0)) {
+    return pickWeightedSymbol(random, mood);
+  }
+
   const r = Math.floor(index / gridSize);
   const c = index % gridSize;
   const neighbourIds = [];
@@ -71,13 +135,22 @@ export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random,
     [0, 1],
     [-1, 0],
     [1, 0],
+    // Diagonals — weaker influence via single push (more spatial variety)
+    [-1, -1],
+    [-1, 1],
+    [1, -1],
+    [1, 1],
   ];
-  for (const [dr, dc] of deltas) {
+  for (let d = 0; d < deltas.length; d += 1) {
+    const [dr, dc] = deltas[d];
     const nr = r + dr;
     const nc = c + dc;
     if (nr < 0 || nr >= gridSize || nc < 0 || nc >= gridSize) continue;
     const id = symbols[nr * gridSize + nc];
-    if (id) neighbourIds.push(id);
+    if (!id) continue;
+    // Cardinals count twice, diagonals once
+    neighbourIds.push(id);
+    if (d < 4) neighbourIds.push(id);
   }
 
   // Also peek one cell below (common cascade neighbour).
@@ -86,19 +159,23 @@ export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random,
     if (below) neighbourIds.push(below);
   }
 
-  if (!neighbourIds.length) return pickWeightedSymbol(random);
+  if (!neighbourIds.length) return pickWeightedSymbol(random, mood);
 
   const boost = new Map();
   for (const id of neighbourIds) {
     boost.set(id, (boost.get(id) || 0) + 1);
   }
 
+  // Per-pick bias jitter around the wave mood
+  const bias = Math.max(1, (mood.bias ?? 3) * (0.65 + random() * 0.75));
+
   const weights = SYMBOLS.map((s) => {
-    // Scatters stay rare — no neighbour clustering bias.
-    if (s.scatter) return s.weight;
+    let w = weightWithMood(s, random, mood);
+    // Scatters stay free of neighbour clustering bias.
+    if (s.scatter) return w;
     const hits = boost.get(s.id) || 0;
-    // Each neighbouring match multiplies weight by `bias` (~3× more similar drops).
-    return s.weight * (hits > 0 ? bias * hits : 1);
+    if (hits > 0) w *= bias * hits;
+    return w;
   });
   const total = weights.reduce((sum, w) => sum + w, 0);
   let roll = random() * total;

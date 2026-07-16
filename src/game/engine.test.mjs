@@ -16,7 +16,13 @@ import {
   multTier,
   freeSpinsForScatters,
 } from './engine.js';
-import { pickBiasedSymbol, countScatters, SCATTER_ID, isScatter } from './symbols.js';
+import {
+  pickBiasedSymbol,
+  createDropMood,
+  countScatters,
+  SCATTER_ID,
+  isScatter,
+} from './symbols.js';
 
 function seeded(seed = 1) {
   let s = seed;
@@ -130,7 +136,41 @@ function seeded(seed = 1) {
   for (let i = 0; i < n; i += 1) {
     if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, 3) === 'cake') cake += 1;
   }
-  assert.ok(cake / n > 0.25, `expected frequent cake matches, got ${cake / n}`);
+  assert.ok(cake / n > 0.22, `expected frequent cake matches, got ${cake / n}`);
+}
+
+{
+  const mood = createDropMood(seeded(42));
+  assert.ok(mood.bias >= 1);
+  assert.ok(mood.chaosRate >= 0 && mood.chaosRate < 1);
+  assert.ok(mood.scatterBoost >= 1);
+
+  // High chaos + no lucky → more non-neighbour variety than tight bias
+  const board = Array(GRID_SIZE * GRID_SIZE).fill(null);
+  board[1] = 'cake';
+  const chaosMood = { bias: 1.5, chaosRate: 0.9, luckyId: null, luckyBoost: 1, scatterBoost: 1 };
+  const tightMood = { bias: 6, chaosRate: 0, luckyId: null, luckyBoost: 1, scatterBoost: 1 };
+  let chaosCake = 0;
+  let tightCake = 0;
+  const n = 1500;
+  for (let i = 0; i < n; i += 1) {
+    if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, chaosMood) === 'cake') chaosCake += 1;
+    if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, tightMood) === 'cake') tightCake += 1;
+  }
+  assert.ok(
+    tightCake > chaosCake,
+    `tight bias should beat chaos (${tightCake} vs ${chaosCake})`,
+  );
+}
+
+{
+  // Different seeds should diverge board composition (randomness smoke test)
+  const a = createGameState(seeded(7));
+  const b = createGameState(seeded(8));
+  fillEmptyCells(a);
+  fillEmptyCells(b);
+  const same = a.symbols.every((id, i) => id === b.symbols[i]);
+  assert.equal(same, false);
 }
 
 {

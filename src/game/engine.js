@@ -12,12 +12,23 @@
 import {
   payForCluster,
   pickBiasedSymbol,
+  createDropMood,
   isScatter,
   countScatters,
 } from './symbols.js';
 
-/** How much more often matching neighbours should drop (~3×+). */
+/** Baseline neighbour match bias (moods jitter around this). */
 export const MATCH_BIAS = 3.25;
+
+function shuffleInPlace(list, random) {
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const tmp = list[i];
+    list[i] = list[j];
+    list[j] = tmp;
+  }
+  return list;
+}
 
 export const GRID_SIZE = 7;
 export const MIN_CLUSTER = 5;
@@ -121,9 +132,15 @@ export function multTier(value) {
 }
 
 export function fillEmptyCells(state) {
-  // Fill top→bottom so lower neighbours already exist for bias.
+  const mood = createDropMood(state.random);
+  // Shuffle column order so openings aren't left-to-right scripted.
+  const cols = shuffleInPlace(
+    Array.from({ length: GRID_SIZE }, (_, c) => c),
+    state.random,
+  );
+  // Fill bottom→top so lower neighbours already exist for bias.
   for (let r = GRID_SIZE - 1; r >= 0; r -= 1) {
-    for (let c = 0; c < GRID_SIZE; c += 1) {
+    for (const c of cols) {
       const i = idx(r, c);
       if (!state.symbols[i]) {
         state.symbols[i] = pickBiasedSymbol(
@@ -131,11 +148,12 @@ export function fillEmptyCells(state) {
           i,
           GRID_SIZE,
           state.random,
-          MATCH_BIAS,
+          mood,
         );
       }
     }
   }
+  return mood;
 }
 
 export function findClusters(symbols) {
@@ -286,10 +304,15 @@ export function resolveTumbleStep(state) {
   const symbolsAfterGravity = [...state.symbols];
   const slideCells = moves.map((m) => m.to);
 
-  // New pieces drop from the top — listed top→bottom, left→right for sequential anim.
-  // Fill bottom empties first within each column so bias sees pieces below.
+  // New pieces drop from the top — listed top→bottom for sequential anim.
+  // Fresh mood each cascade wave so tumbles don't feel copy-pasted.
+  const dropMood = createDropMood(state.random);
   const newDropCells = [];
-  for (let c = 0; c < GRID_SIZE; c += 1) {
+  const cols = shuffleInPlace(
+    Array.from({ length: GRID_SIZE }, (_, c) => c),
+    state.random,
+  );
+  for (const c of cols) {
     let empties = 0;
     for (let r = 0; r < GRID_SIZE; r += 1) {
       if (!state.symbols[idx(r, c)]) empties += 1;
@@ -306,14 +329,16 @@ export function resolveTumbleStep(state) {
         i,
         GRID_SIZE,
         state.random,
-        MATCH_BIAS,
+        dropMood,
       );
       fallDistance[i] = r + 1 + (empties - spawnOrder);
     });
-    // Animation order: top→bottom within the column (as they visually fall in).
+  }
+  // Animation order stays left→right, top→bottom (visual cascade path).
+  for (let c = 0; c < GRID_SIZE; c += 1) {
     for (let r = 0; r < GRID_SIZE; r += 1) {
       const i = idx(r, c);
-      if (emptyRows.includes(r)) newDropCells.push(i);
+      if (!symbolsAfterGravity[i] && state.symbols[i]) newDropCells.push(i);
     }
   }
 
