@@ -469,7 +469,52 @@ function boardFlash() {
   );
 }
 
-/** Clone winning tiles into FX layer and explode them outward. */
+function clusterCenterInFx(cells) {
+  if (!cells?.length) {
+    const board = els.fx.getBoundingClientRect();
+    return { x: board.width / 2, y: board.height * 0.42 };
+  }
+  let sx = 0;
+  let sy = 0;
+  for (const i of cells) {
+    const p = cellCenterInFx(i);
+    sx += p.x;
+    sy += p.y;
+  }
+  return { x: sx / cells.length, y: sy / cells.length };
+}
+
+/** Soft vapor wisps rising from a cell (not an explosion). */
+function puffVapor(cellIndex, count = 5) {
+  if (reduceMotion) return;
+  const { x, y } = cellCenterInFx(cellIndex);
+  for (let i = 0; i < count; i += 1) {
+    const mist = spawnFxNode('vapor', x, y);
+    const driftX = gsap.utils.random(-14, 14);
+    gsap.fromTo(
+      mist,
+      {
+        x: gsap.utils.random(-6, 6),
+        y: gsap.utils.random(-4, 6),
+        xPercent: -50,
+        yPercent: -50,
+        scale: gsap.utils.random(0.55, 1),
+        opacity: gsap.utils.random(0.35, 0.7),
+      },
+      {
+        x: driftX,
+        y: gsap.utils.random(-36, -18),
+        scale: gsap.utils.random(1.2, 1.8),
+        opacity: 0,
+        duration: gsap.utils.random(0.45, 0.75),
+        ease: 'power1.out',
+        onComplete: () => mist.remove(),
+      },
+    );
+  }
+}
+
+/** Winning tiles dissolve / evaporate in place — no outward blast. */
 async function explodeCells(winningCells) {
   if (reduceMotion) {
     winningCells.forEach((i) => hideTile(cellNodes[i]));
@@ -479,99 +524,76 @@ async function explodeCells(winningCells) {
   const winTiles = winningCells.map((i) => cellNodes[i].tile);
   const winGlyphs = winningCells.map((i) => cellNodes[i].glyph);
 
-  // 1) Anticipation on tiles + glyphs — cell boxes stay fixed size
+  winningCells.forEach((i) => cellNodes[i].el.classList.add('is-vanishing'));
+
+  // Soft brighten, then rise + fade + blur (evaporate)
   await gsap
     .timeline()
     .to(winTiles, {
-      scale: 1.14,
-      filter: 'brightness(1.35) saturate(1.3)',
-      duration: 0.26,
-      ease: 'power2.out',
-      stagger: { each: 0.02, from: 'center' },
+      filter: 'brightness(1.35) saturate(1.15)',
+      duration: 0.18,
+      ease: 'power1.out',
+      stagger: { each: 0.015, from: 'center' },
     }, 0)
     .to(winGlyphs, {
-      scale: 1.18,
-      filter: 'brightness(1.35) saturate(1.25)',
-      duration: 0.26,
-      ease: 'power2.out',
-      stagger: { each: 0.02, from: 'center' },
+      filter: 'brightness(1.4) saturate(1.1)',
+      duration: 0.18,
+      ease: 'power1.out',
+      stagger: { each: 0.015, from: 'center' },
     }, 0)
     .to(winTiles, {
-      scaleX: 1.2,
-      scaleY: 0.84,
-      duration: 0.14,
+      y: -10,
+      scale: 0.55,
+      opacity: 0,
+      filter: 'brightness(1.6) blur(6px)',
+      duration: 0.42,
       ease: 'power2.in',
+      stagger: { each: 0.018, from: 'center' },
     })
     .to(winGlyphs, {
-      scaleX: 1.22,
-      scaleY: 0.86,
-      duration: 0.14,
+      y: -14,
+      scale: 0.45,
+      opacity: 0,
+      filter: 'brightness(1.7) blur(5px)',
+      duration: 0.42,
       ease: 'power2.in',
+      stagger: { each: 0.018, from: 'center' },
     }, '<');
 
-  boardFlash();
-
-  // 2) Launch candy clones + shockwaves + particles
-  const flyTl = gsap.timeline();
-  winningCells.forEach((i, order) => {
-    const node = cellNodes[i];
-    const symbolId = [...node.el.classList].find((c) => c.startsWith('sym-'))?.slice(4);
-    node.el.classList.add('is-exploding');
-
-    const fly = spawnFlyTile(i, symbolId);
-    hideTile(node);
-
-    const angle = gsap.utils.random(-Math.PI, Math.PI);
-    const dist = gsap.utils.random(30, 58);
-    const spin = gsap.utils.random(-180, 180);
-    const start = order * 0.022;
-
-    flyTl.fromTo(
-      fly,
-      { scale: 1.12, opacity: 1, rotation: 0, x: 0, y: 0 },
-      {
-        x: Math.cos(angle) * dist,
-        y: Math.sin(angle) * dist - 12,
-        scale: 0.12,
-        rotation: spin,
-        opacity: 0,
-        duration: 0.58,
-        ease: 'power3.in',
-        onComplete: () => fly.remove(),
-      },
-      start,
-    );
-
-    flyTl.add(() => {
-      burstShockwave(i);
-      burstSparks(i, 14);
-      node.el.classList.remove('is-exploding');
-    }, start + 0.18);
+  winningCells.forEach((i) => {
+    puffVapor(i, 4);
+    hideTile(cellNodes[i]);
+    cellNodes[i].el.classList.remove('is-vanishing');
+    gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
+      clearProps: 'transform,filter,opacity',
+    });
   });
-
-  await flyTl;
 }
 
-function floatWin(amount) {
+/** Win sum floats near the cluster centre where pieces just vanished. */
+function floatWin(amount, atCells = []) {
   if (!amount) return;
+  const { x, y } = clusterCenterInFx(atCells);
   const node = document.createElement('div');
   node.className = 'float-num';
   node.textContent = `+${formatVardinShort(amount)}`;
+  node.style.left = `${x}px`;
+  node.style.top = `${y}px`;
   els.fx.appendChild(node);
   gsap.fromTo(
     node,
-    { xPercent: -50, y: 24, opacity: 0, scale: 0.7 },
+    { xPercent: -50, yPercent: -50, y: 8, opacity: 0, scale: 0.75 },
     {
-      y: -52,
+      y: -36,
       opacity: 1,
-      scale: 1.15,
-      duration: reduceMotion ? 0.01 : 0.7,
+      scale: 1.12,
+      duration: reduceMotion ? 0.01 : 0.65,
       ease: 'power3.out',
       onComplete: () => {
         gsap.to(node, {
           opacity: 0,
-          y: -80,
-          duration: 0.4,
+          y: -56,
+          duration: 0.38,
           onComplete: () => node.remove(),
         });
       },
@@ -926,18 +948,19 @@ async function animateCascadeFalls(step) {
 async function animateStep(step) {
   paintBoard(step.symbolsBefore, step.multipliersBefore, step.marksBefore, step.winningCells);
 
-  floatWin(step.stepWin);
   if (tg?.HapticFeedback) {
     try {
-      tg.HapticFeedback.impactOccurred('medium');
+      tg.HapticFeedback.impactOccurred('light');
     } catch {
       /* ignore */
     }
   }
+  // Sum appears as pieces evaporate, roughly over the cluster centre
+  floatWin(step.stepWin, step.winningCells);
   await explodeCells(step.winningCells);
 
   for (const i of step.winningCells) {
-    cellNodes[i].el.classList.remove('is-win', 'is-exploding');
+    cellNodes[i].el.classList.remove('is-win', 'is-exploding', 'is-vanishing');
     gsap.set(cellNodes[i].tile, { clearProps: 'transform,filter,opacity' });
     gsap.set(cellNodes[i].glyph, { clearProps: 'transform,filter,opacity' });
   }

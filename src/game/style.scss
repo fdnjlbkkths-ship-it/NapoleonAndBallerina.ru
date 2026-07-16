@@ -270,8 +270,14 @@ body {
   z-index: 2;
 }
 
-.cell.is-exploding {
-  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.55), rgba(255, 77, 141, 0.35) 55%, transparent 70%);
+.cell.is-exploding,
+.cell.is-vanishing {
+  background: radial-gradient(
+    circle at 50% 40%,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 200, 230, 0.16) 45%,
+    transparent 72%
+  );
 }
 
 /* Candy / pastry tile — the actual symbol position */
@@ -748,17 +754,32 @@ body {
     conic-gradient(from 200deg, #ff4d8d, #ffd45a, #5dffc2, #7b5cff, #ff9ae0, #ff4d8d);
 }
 
+.vapor {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.75), rgba(255, 200, 230, 0.25) 55%, transparent 70%);
+  filter: blur(2px);
+  pointer-events: none;
+  z-index: 5;
+  will-change: transform, opacity;
+}
+
 .float-num {
   position: absolute;
-  left: 50%;
-  top: 40%;
+  left: 0;
+  top: 0;
   font-family: var(--display);
   font-weight: 700;
-  font-size: 1.55rem;
+  font-size: clamp(1.15rem, 5vw, 1.55rem);
   color: var(--gold);
-  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.55);
-  z-index: 5;
+  text-shadow:
+    0 2px 0 rgba(80, 20, 40, 0.35),
+    0 4px 16px rgba(0, 0, 0, 0.55);
+  z-index: 7;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .win-banner {
