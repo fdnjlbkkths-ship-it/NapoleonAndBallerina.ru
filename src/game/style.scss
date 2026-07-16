@@ -333,14 +333,14 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-/* Fruit / pastry art — always above tile, mark, and multiplier */
+/* Fruit / pastry art — always centered and above numbers */
 .cell__glyph {
   position: absolute;
   left: 50%;
   top: 50%;
   translate: -50% -50%;
-  z-index: 5;
-  font-size: clamp(1.05rem, 4.8vw, 1.45rem);
+  z-index: 6;
+  font-size: clamp(1.2rem, 5.6vw, 1.7rem);
   line-height: 1;
   opacity: 0;
   pointer-events: none;
@@ -358,7 +358,7 @@ body {
   left: 50%;
   top: 50%;
   translate: -50% -50%;
-  /* Sugar-spot disc — sits under the pastry/fruit glyph */
+  /* Empty sticky spot — centered when no fruit/pastry */
   height: 1.35rem;
   min-width: 1.35rem;
   width: max-content;
@@ -387,6 +387,23 @@ body {
 .cell__mult.is-on {
   opacity: 0.95;
   transform: scale(1);
+}
+
+/* With a symbol present — tuck ×badge into the corner so icon stays clear */
+.cell:not(.is-empty) .cell__mult.is-on {
+  left: auto;
+  right: 1px;
+  top: auto;
+  bottom: 1px;
+  translate: none;
+  height: 1.05rem;
+  min-width: 1.05rem;
+  max-width: 70%;
+  padding: 0 4px;
+  font-size: 0.52rem !important;
+  line-height: 1.05rem !important;
+  z-index: 4;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* Multiplier colour tiers (value grows → colour shifts) */
@@ -575,11 +592,15 @@ body {
 }
 
 .cell.is-scatter .cell__glyph {
-  z-index: 5;
+  z-index: 6;
   animation: fs-glyph-dance 1.1s ease-in-out infinite;
   filter:
     drop-shadow(0 0 6px rgba(255, 212, 90, 0.95))
     drop-shadow(0 0 10px rgba(255, 77, 141, 0.65));
+}
+
+.cell.is-scatter:not(.is-empty) .cell__mult.is-on {
+  z-index: 4;
 }
 
 @keyframes fs-tile-pulse {
