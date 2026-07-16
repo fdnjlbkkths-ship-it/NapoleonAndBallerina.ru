@@ -114,9 +114,15 @@
         <span class="logo__rush">RUSH</span>
         <span class="logo__1k">1000</span>
       </div>
-      <div class="fs-badge is-hidden" id="fs-badge">
-        <span class="fs-badge__label">FREE SPINS</span>
-        <span class="fs-badge__value" id="stat-spins">0</span>
+      <div class="header-right">
+        <button type="button" class="bank-chip" id="btn-wallet" aria-label="Промокоды и баллы">
+          <span class="bank-chip__label">БАЛЛЫ</span>
+          <span class="bank-chip__value" id="stat-bank">0</span>
+        </button>
+        <div class="fs-badge is-hidden" id="fs-badge">
+          <span class="fs-badge__label">FREE SPINS</span>
+          <span class="fs-badge__value" id="stat-spins">0</span>
+        </div>
       </div>
     </header>
 
@@ -188,12 +194,28 @@
     </div>
   </div>
 
-  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
-    <div class="overlay__card">
-      <h2>Бонус завершён</h2>
-      <p>Выигрыш за раунд (1 Вардин = 1 ₽)</p>
-      <div class="overlay__price" id="overlay-points">0 Вардин</div>
-      <button type="button" class="btn btn--primary" id="overlay-close">OK</button>
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="reward-title">
+    <div class="overlay__card overlay__card--reward">
+      <h2 id="reward-title">Бонус завершён</h2>
+      <p id="reward-sub">Выигрыш зачислен в баллы на скидку в кондитерской</p>
+      <div class="overlay__price" id="overlay-points">0</div>
+      <p class="reward-pity is-hidden" id="reward-pity"></p>
+      <div class="reward-bank-line">
+        Накоплено: <strong id="reward-bank-total">0</strong> баллов
+      </div>
+
+      <div class="promo-list" id="promo-list" aria-label="Обмен на промокод"></div>
+
+      <div class="promo-code-box is-hidden" id="promo-code-box">
+        <span class="promo-code-box__label">Ваш промокод</span>
+        <strong class="promo-code-box__code" id="promo-code-value"></strong>
+        <span class="promo-code-box__hint">Покажите при заказе · сохраняется до следующего визита</span>
+        <button type="button" class="btn btn--ghost" id="promo-copy">Скопировать</button>
+      </div>
+
+      <div class="overlay__actions overlay__actions--stack">
+        <button type="button" class="btn btn--primary" id="overlay-close">Играть дальше</button>
+      </div>
     </div>
   </div>
 

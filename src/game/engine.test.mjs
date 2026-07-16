@@ -107,7 +107,7 @@ function seeded(seed = 1) {
 }
 
 {
-  assert.equal(MATCH_BIAS, 3);
+  assert.ok(MATCH_BIAS >= 3);
   // Biased picker should favour the neighbour id far more often than uniform.
   const board = Array(GRID_SIZE * GRID_SIZE).fill(null);
   board[1] = 'cake'; // neighbour of index 0

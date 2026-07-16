@@ -13,8 +13,8 @@ import {
   countScatters,
 } from './symbols.js';
 
-/** How much more often matching neighbours should drop (~3×). */
-export const MATCH_BIAS = 3;
+/** How much more often matching neighbours should drop (~3×+). */
+export const MATCH_BIAS = 3.25;
 
 export const GRID_SIZE = 7;
 export const MIN_CLUSTER = 5;

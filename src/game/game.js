@@ -3,6 +3,8 @@ import {
   GRID_SIZE,
   BUY_BONUS_COST_MULT,
   BUY_SUPER_COST_MULT,
+  BET_STEPS,
+  START_BALANCE,
   createGameState,
   fillEmptyCells,
   playBaseSpin,
@@ -14,6 +16,17 @@ import {
   multTier,
 } from './engine.js';
 import { SYMBOL_BY_ID, isScatter } from './symbols.js';
+import {
+  PROMO_TIERS,
+  MIN_BONUS_ROUND_POINTS,
+  applyBonusPity,
+  redeemPromo,
+} from './promo.js';
+import {
+  loadUserCache,
+  persistProgress,
+  getTelegramUserName,
+} from './storage.js';
 import './style.scss';
 
 const tg = window.Telegram?.WebApp;
@@ -27,6 +40,8 @@ const els = {
   balance: document.getElementById('stat-balance'),
   win: document.getElementById('stat-win'),
   bet: document.getElementById('stat-bet'),
+  bank: document.getElementById('stat-bank'),
+  walletBtn: document.getElementById('btn-wallet'),
   spinBtn: document.getElementById('btn-spin'),
   spinLabel: document.getElementById('spin-label'),
   betMinus: document.getElementById('btn-bet-minus'),
@@ -42,6 +57,13 @@ const els = {
   overlay: document.getElementById('overlay'),
   overlayPoints: document.getElementById('overlay-points'),
   overlayClose: document.getElementById('overlay-close'),
+  rewardSub: document.getElementById('reward-sub'),
+  rewardPity: document.getElementById('reward-pity'),
+  rewardBankTotal: document.getElementById('reward-bank-total'),
+  promoList: document.getElementById('promo-list'),
+  promoCodeBox: document.getElementById('promo-code-box'),
+  promoCodeValue: document.getElementById('promo-code-value'),
+  promoCopy: document.getElementById('promo-copy'),
   buyOverlay: document.getElementById('buy-overlay'),
   buyOverlayTitle: document.getElementById('buy-overlay-title'),
   buyOverlayText: document.getElementById('buy-overlay-text'),
@@ -51,9 +73,36 @@ const els = {
 };
 
 let state = createGameState();
+let rewardBank = 0;
+let promoCodes = [];
 let cellNodes = [];
 let animating = false;
 let pendingBuy = null; // 'bonus' | 'super'
+let lastIssuedCode = '';
+
+function saveCache() {
+  persistProgress({
+    rewardBank,
+    balance: state.balance,
+    betIndex: state.betIndex,
+    codes: promoCodes,
+  });
+}
+
+function restoreFromCache() {
+  const cache = loadUserCache();
+  rewardBank = Number(cache.rewardBank) || 0;
+  promoCodes = Array.isArray(cache.codes) ? cache.codes : [];
+  if (cache.balance != null && Number.isFinite(Number(cache.balance))) {
+    state.balance = Number(cache.balance);
+  } else {
+    state.balance = START_BALANCE;
+  }
+  if (cache.betIndex != null && BET_STEPS[cache.betIndex] != null) {
+    state.betIndex = cache.betIndex;
+    state.bet = BET_STEPS[cache.betIndex];
+  }
+}
 
 function initTelegram() {
   if (!tg) return;
@@ -125,6 +174,7 @@ function updateHud() {
   els.balance.textContent = formatVardinShort(state.balance);
   els.win.textContent = formatVardinShort(state.lastWin);
   els.bet.textContent = formatVardinShort(state.bet);
+  if (els.bank) els.bank.textContent = formatVardinShort(rewardBank);
   els.buyCost.textContent = `${BUY_BONUS_COST_MULT}× · ${formatVardin(state.bet * BUY_BONUS_COST_MULT)}`;
   els.superCost.textContent = `${BUY_SUPER_COST_MULT}× · ${formatVardin(state.bet * BUY_SUPER_COST_MULT)}`;
 
@@ -139,6 +189,92 @@ function updateHud() {
   els.buyBtn.disabled = locked;
   els.buySuperBtn.disabled = locked;
   els.spinBtn.disabled = animating;
+}
+
+function renderPromoList() {
+  if (!els.promoList) return;
+  els.promoList.innerHTML = PROMO_TIERS.map((tier) => {
+    const affordable = rewardBank + 1e-9 >= tier.cost;
+    return `
+      <article class="promo-card" data-tier="${tier.id}">
+        <div>
+          <div class="promo-card__title">${tier.title}</div>
+          <span class="promo-card__meta">${tier.hint} · ${formatVardinShort(tier.cost)} баллов</span>
+        </div>
+        <button type="button" class="promo-card__btn" data-redeem="${tier.id}" ${affordable ? '' : 'disabled'}>
+          Обменять
+        </button>
+      </article>
+    `;
+  }).join('');
+
+  els.promoList.querySelectorAll('[data-redeem]').forEach((btn) => {
+    btn.addEventListener('click', () => onRedeem(btn.getAttribute('data-redeem')));
+  });
+}
+
+function showIssuedCode(code) {
+  lastIssuedCode = code;
+  if (!els.promoCodeBox) return;
+  els.promoCodeBox.classList.remove('is-hidden');
+  els.promoCodeValue.textContent = code;
+}
+
+function openRewardOverlay({ roundWin, pity = 0, title = 'Бонус завершён' } = {}) {
+  document.getElementById('reward-title').textContent = title;
+  if (els.rewardSub) {
+    els.rewardSub.textContent = `${getTelegramUserName()}, обменяйте баллы на скидку в домашней кондитерской`;
+  }
+  els.overlayPoints.textContent = `${formatVardinShort(roundWin)} баллов`;
+  if (els.rewardPity) {
+    if (pity > 0) {
+      els.rewardPity.textContent = `Гарантия раунда: +${formatVardinShort(pity)} до промокода 5%`;
+      els.rewardPity.classList.remove('is-hidden');
+    } else {
+      els.rewardPity.classList.add('is-hidden');
+    }
+  }
+  if (els.rewardBankTotal) {
+    els.rewardBankTotal.textContent = formatVardinShort(rewardBank);
+  }
+  if (els.promoCodeBox) els.promoCodeBox.classList.add('is-hidden');
+  renderPromoList();
+  els.overlay.classList.add('is-open');
+}
+
+function onRedeem(tierId) {
+  const result = redeemPromo(rewardBank, tierId);
+  if (!result.ok) {
+    showToast('Недостаточно баллов');
+    return;
+  }
+  rewardBank = result.bankAfter;
+  promoCodes = [
+    {
+      code: result.code,
+      discount: result.tier.discount,
+      tierId: result.tier.id,
+      issuedAt: result.issuedAt,
+    },
+    ...promoCodes,
+  ].slice(0, 30);
+  saveCache();
+  updateHud();
+  renderPromoList();
+  showIssuedCode(result.code);
+  showToast(`Промокод −${result.tier.discount}% готов`);
+  if (els.rewardBankTotal) {
+    els.rewardBankTotal.textContent = formatVardinShort(rewardBank);
+  }
+}
+
+function settleBonusRound(rawRoundWin) {
+  const { credited, pity } = applyBonusPity(rawRoundWin);
+  rewardBank = +(rewardBank + credited).toFixed(2);
+  saveCache();
+  updateHud();
+  openRewardOverlay({ roundWin: credited, pity });
+  els.status.textContent = `Бонус в баллы · от ${MIN_BONUS_ROUND_POINTS} на промокод 5%`;
 }
 
 function setBusy(busy) {
@@ -629,11 +765,11 @@ async function onSpin() {
       showToast(`🍭 ×${result.scatterCount} → +${result.retrigger} FREE SPINS`);
     }
     if (result.done) {
-      els.overlayPoints.textContent = formatVardin(result.totalBonusWin);
-      els.overlay.classList.add('is-open');
       fillEmptyCells(state);
       paintBoard(state.symbols, state.multipliers, state.marks, []);
-      els.status.textContent = 'Бонус окончен · 1 Вардин = 1 ₽';
+      settleBonusRound(result.totalBonusWin);
+    } else {
+      saveCache();
     }
     setBusy(false);
     return;
@@ -648,6 +784,7 @@ async function onSpin() {
   }
   els.status.textContent = 'Каскад…';
   await runResult(result);
+  saveCache();
   if (result.triggeredBonus) {
     showToast('🍭 ×3+ FREE SPINS!');
     els.status.textContent = 'Бонус открыт · 3 Free Spin за спин дают +5';
@@ -657,7 +794,7 @@ async function onSpin() {
     els.status.textContent =
       result.spinWin > 0
         ? `Выигрыш ${formatVardin(result.spinWin)}`
-        : '🍭 Free Spin: 3 за спин → +5 · кластер 5+ удваивает ×';
+        : 'Баллы с бонуса → промокод на скидку · 🍭×3 = +5 FS';
   }
   setBusy(false);
 }
@@ -687,6 +824,7 @@ function confirmBuy() {
   }
   paintBoard(result.symbols, result.multipliers, result.marks, []);
   updateHud();
+  saveCache();
   showToast(result.mode === 'super' ? 'SUPER BONUS!' : 'FREE SPINS!');
   els.status.textContent = 'Нажмите SPIN / FS для фриспина';
 }
@@ -697,11 +835,13 @@ function bind() {
     if (animating || state.mode !== 'base') return;
     changeBet(state, -1);
     updateHud();
+    saveCache();
   });
   els.betPlus.addEventListener('click', () => {
     if (animating || state.mode !== 'base') return;
     changeBet(state, 1);
     updateHud();
+    saveCache();
   });
   els.buyBtn.addEventListener('click', () => openBuy('bonus'));
   els.buySuperBtn.addEventListener('click', () => openBuy('super'));
@@ -713,6 +853,28 @@ function bind() {
   els.overlayClose.addEventListener('click', () => {
     els.overlay.classList.remove('is-open');
     updateHud();
+    saveCache();
+  });
+  els.walletBtn?.addEventListener('click', () => {
+    openRewardOverlay({
+      roundWin: rewardBank,
+      pity: 0,
+      title: 'Баллы и промокоды',
+    });
+    if (els.overlayPoints) {
+      els.overlayPoints.textContent = `${formatVardinShort(rewardBank)} баллов`;
+    }
+    if (promoCodes[0]) showIssuedCode(promoCodes[0].code);
+  });
+  els.promoCopy?.addEventListener('click', async () => {
+    const code = lastIssuedCode || promoCodes[0]?.code;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      showToast('Промокод скопирован');
+    } catch {
+      showToast(code);
+    }
   });
 }
 
@@ -744,30 +906,34 @@ async function hideSplash() {
 async function boot() {
   setSplashProgress(8);
   initTelegram();
-  setSplashProgress(22);
-  await wait(180);
+  setSplashProgress(18);
+  await wait(120);
+
+  restoreFromCache();
+  setSplashProgress(34);
+  await wait(120);
 
   buildBoard();
-  setSplashProgress(48);
-  await wait(160);
+  setSplashProgress(55);
+  await wait(140);
 
   fillEmptyCells(state);
   paintBoard(state.symbols, state.multipliers, state.marks, []);
-  setSplashProgress(72);
-  await wait(160);
+  setSplashProgress(74);
+  await wait(140);
 
   bind();
   updateHud();
+  saveCache();
   els.status.textContent =
-    'Все ×2 · 🍭 Free Spin ×3 за спин → +5 · кластер удваивает множитель · 1 Вардин = 1 ₽';
+    `С возвращением, ${getTelegramUserName()} · баллы копите на промокод от 5%`;
   setSplashProgress(92);
-  await wait(220);
+  await wait(180);
 
   setSplashProgress(100);
-  await wait(180);
+  await wait(160);
   await hideSplash();
 
-  // Soft intro on the board after splash
   if (!reduceMotion) {
     gsap.from('.slot', { opacity: 0, y: 16, duration: 0.45, ease: 'power2.out' });
   }

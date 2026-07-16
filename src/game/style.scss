@@ -62,6 +62,37 @@ body {
   gap: 8px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bank-chip {
+  appearance: none;
+  border: 1px solid rgba(255, 212, 90, 0.45);
+  border-radius: 14px;
+  padding: 6px 10px;
+  background: linear-gradient(180deg, rgba(255, 212, 90, 0.22), rgba(255, 77, 141, 0.18));
+  color: var(--text);
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.bank-chip__label {
+  display: block;
+  font-size: 0.55rem;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.bank-chip__value {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  color: var(--gold);
+}
+
 .logo {
   display: flex;
   align-items: baseline;
@@ -700,6 +731,132 @@ body {
   background: linear-gradient(160deg, #3a1a5c, #1a0f2e);
   border: 1px solid rgba(255, 255, 255, 0.14);
   text-align: center;
+  max-height: min(86dvh, 640px);
+  overflow: auto;
+}
+
+.overlay__card--reward {
+  width: min(100%, 380px);
+  text-align: left;
+}
+
+.overlay__card--reward h2,
+.overlay__card--reward > p,
+.overlay__card--reward .overlay__price {
+  text-align: center;
+}
+
+.reward-pity {
+  margin: -6px 0 10px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--mint);
+}
+
+.reward-pity.is-hidden {
+  display: none;
+}
+
+.reward-bank-line {
+  text-align: center;
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.reward-bank-line strong {
+  color: var(--gold);
+  font-family: var(--display);
+  font-size: 1.15rem;
+}
+
+.promo-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.promo-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.promo-card__title {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  color: #fff;
+}
+
+.promo-card__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.promo-card__btn {
+  appearance: none;
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 800;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: #4a1400;
+  background: linear-gradient(180deg, #ffe08a, var(--gold-deep));
+  white-space: nowrap;
+}
+
+.promo-card__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
+.promo-code-box {
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(255, 77, 141, 0.25), rgba(255, 212, 90, 0.2));
+  border: 1px dashed rgba(255, 212, 90, 0.65);
+}
+
+.promo-code-box.is-hidden {
+  display: none;
+}
+
+.promo-code-box__label {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.promo-code-box__code {
+  display: block;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  word-break: break-all;
+}
+
+.promo-code-box__hint {
+  display: block;
+  margin: 8px 0 10px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.overlay__actions--stack {
+  grid-template-columns: 1fr;
 }
 
 .overlay__card h2 {
