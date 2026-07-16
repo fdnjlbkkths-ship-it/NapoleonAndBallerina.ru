@@ -30,11 +30,74 @@ import {
 import './style.scss';
 
 const tg = window.Telegram?.WebApp;
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-/** Phones / coarse pointers: lighter FX so icons stay visible and snappy. */
-const liteFx =
-  reduceMotion ||
-  window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
+
+/** Auto-detect iPhone / Samsung / Android / Telegram mobile and tune FX. */
+function detectPerfProfile() {
+  const ua = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const tgPlatform = String(tg?.platform || '').toLowerCase();
+
+  const isIPhone = /iPhone|iPod/i.test(ua);
+  const isIPad =
+    /iPad/i.test(ua) || (platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);
+  const isIOS = isIPhone || isIPad || /iOS|CriOS|FxiOS/i.test(ua) || tgPlatform === 'ios';
+  const isAndroid = /Android/i.test(ua) || tgPlatform === 'android';
+  const isSamsung = /SamsungBrowser|SM-|GT-|Galaxy/i.test(ua);
+  const isMobileUA = /Mobile|Android|iPhone|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const narrow = window.matchMedia('(max-width: 920px)').matches;
+  const shortScreen = Math.min(screen.width || 9999, screen.height || 9999) <= 920;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const saveData = Boolean(navigator.connection?.saveData);
+  const lowMem =
+    typeof navigator.deviceMemory === 'number' && navigator.deviceMemory > 0 && navigator.deviceMemory <= 4;
+  const lowCpu =
+    typeof navigator.hardwareConcurrency === 'number' && navigator.hardwareConcurrency <= 4;
+
+  const isPhone =
+    isIPhone ||
+    isSamsung ||
+    (isAndroid && isMobileUA) ||
+    tgPlatform === 'ios' ||
+    tgPlatform === 'android' ||
+    (coarse && narrow && (isMobileUA || shortScreen));
+
+  const lite = reduce || isPhone || saveData || (coarse && (lowMem || lowCpu));
+
+  return {
+    isIPhone,
+    isIOS,
+    isAndroid,
+    isSamsung,
+    isPhone,
+    lite,
+    reduce,
+    saveData,
+  };
+}
+
+const perf = detectPerfProfile();
+const reduceMotion = perf.reduce;
+/** Lighter cascade/FX path — enabled automatically on phones. */
+const liteFx = perf.lite;
+
+(function applyPerfMode() {
+  const root = document.documentElement;
+  if (perf.lite || perf.isPhone) root.classList.add('is-phone-opt');
+  if (perf.isIOS) root.classList.add('is-ios');
+  if (perf.isAndroid || perf.isSamsung) root.classList.add('is-android');
+  if (perf.isSamsung) root.classList.add('is-samsung');
+  if (perf.lite) root.classList.add('is-lite-fx');
+
+  // Snappier tweens on phones; less work for the main thread.
+  gsap.ticker.lagSmoothing(500, 33);
+  if (liteFx) {
+    gsap.defaults({
+      ease: 'power2.out',
+      overwrite: 'auto',
+    });
+  }
+})();
 
 const els = {
   board: document.getElementById('board'),
@@ -1182,8 +1245,18 @@ async function boot() {
   bind();
   updateHud();
   saveCache();
-  els.status.textContent =
-    `С возвращением, ${getTelegramUserName()} · sticky × · 🍭FS · баллы→скидка`;
+  const deviceTag = perf.isIPhone
+    ? 'iPhone'
+    : perf.isSamsung
+      ? 'Samsung'
+      : perf.isAndroid
+        ? 'Android'
+        : perf.isPhone
+          ? 'mobile'
+          : 'desktop';
+  els.status.textContent = perf.lite
+    ? `${getTelegramUserName()} · режим ${deviceTag} · быстрые анимации`
+    : `С возвращением, ${getTelegramUserName()} · sticky × · 🍭FS · баллы→скидка`;
   setSplashProgress(100);
   await wait(liteFx ? 80 : 160);
   await hideSplash();

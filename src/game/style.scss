@@ -1289,3 +1289,46 @@ body {
     transition: none !important;
   }
 }
+
+/* Auto phone/Samsung/iPhone optimization (class set by detect script) */
+html.is-phone-opt {
+  .cell.is-scatter::before,
+  .cell.mult-tier-1024::before {
+    animation: none !important;
+  }
+
+  .cell.is-scatter .cell__tile,
+  .cell.is-scatter .cell__glyph,
+  .cell.is-scatter::after,
+  .cell.mult-tier-1024,
+  .cell__mult.mult-tier-1024,
+  .cell__mark-dot.is-on {
+    animation: none !important;
+    filter: none !important;
+  }
+
+  .fly-glyph {
+    filter: none;
+    will-change: auto;
+  }
+
+  .vapor {
+    display: none !important;
+  }
+
+  .splash__candy span {
+    will-change: auto;
+    animation-duration: 1.4s;
+  }
+
+  .overlay {
+    backdrop-filter: none;
+  }
+}
+
+html.is-ios .cell__glyph,
+html.is-android .cell__glyph {
+  /* Emoji compositing is cheaper without layered filters */
+  filter: none !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}

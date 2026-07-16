@@ -10,9 +10,31 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Auto iPhone / Samsung / Android detect before paint -->
+  <script>
+    (function () {
+      try {
+        var ua = navigator.userAgent || '';
+        var tgPlat = (window.Telegram && Telegram.WebApp && Telegram.WebApp.platform) || '';
+        var isIPhone = /iPhone|iPod/i.test(ua);
+        var isAndroidMobile = /Android/i.test(ua) && /Mobile/i.test(ua);
+        var isSamsung = /SamsungBrowser|SM-|Galaxy/i.test(ua);
+        var isTgPhone = /^(ios|android)$/i.test(String(tgPlat));
+        var coarse = window.matchMedia('(pointer: coarse)').matches;
+        var narrow = Math.min(screen.width || 0, screen.height || 0) <= 920;
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var phone = isIPhone || isAndroidMobile || isSamsung || isTgPhone || (coarse && narrow);
+        if (phone || reduce) document.documentElement.classList.add('is-phone-opt');
+        if (isIPhone || /^ios$/i.test(String(tgPlat))) document.documentElement.classList.add('is-ios');
+        if (isAndroidMobile || isSamsung || /^android$/i.test(String(tgPlat))) {
+          document.documentElement.classList.add('is-android');
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
   <!-- Committed production CSS — works on GitHub Pages immediately -->
   <link rel="stylesheet" href="assets/game.css">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     html,body{margin:0;min-height:100%;background:#2a0f3d;color:#fff7fb}
     .splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:24px;background:radial-gradient(90% 60% at 50% -10%,rgba(255,122,180,.45),transparent 55%),radial-gradient(70% 50% at 100% 40%,rgba(255,200,80,.25),transparent 50%),linear-gradient(180deg,#5b1d6e,#2a0f3d);color:#fff7fb;font-family:Nunito,system-ui,sans-serif}
