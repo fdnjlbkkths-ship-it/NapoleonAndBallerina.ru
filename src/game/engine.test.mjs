@@ -15,7 +15,7 @@ import {
   nextMultiplier,
   multTier,
 } from './engine.js';
-import { pickBiasedSymbol } from './symbols.js';
+import { pickBiasedSymbol, countScatters, SCATTER_ID, isScatter } from './symbols.js';
 
 function seeded(seed = 1) {
   let s = seed;
@@ -117,6 +117,17 @@ function seeded(seed = 1) {
     if (pickBiasedSymbol(board, 0, GRID_SIZE, Math.random, 3) === 'cake') cake += 1;
   }
   assert.ok(cake / n > 0.25, `expected frequent cake matches, got ${cake / n}`);
+}
+
+{
+  assert.equal(isScatter(SCATTER_ID), true);
+  const board = Array(GRID_SIZE * GRID_SIZE).fill('cake');
+  board[0] = SCATTER_ID;
+  board[3] = SCATTER_ID;
+  board[8] = SCATTER_ID;
+  assert.equal(countScatters(board), 3);
+  // Scatters do not form paying clusters
+  assert.equal(findClusters(board).every((c) => c.symbolId !== SCATTER_ID), true);
 }
 
 console.log('engine.test.mjs: all passed');

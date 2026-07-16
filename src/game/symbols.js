@@ -1,5 +1,7 @@
 /** Pastry symbols for the board — decorative figures only, no real stakes. */
 
+export const SCATTER_ID = 'freespin';
+
 export const SYMBOLS = [
   { id: 'eclair', label: 'Эклер', glyph: '🥐', tint: '#c47a4a', weight: 18 },
   { id: 'pavlova', label: 'Анна Павлова', glyph: '🍨', tint: '#f3d6e0', weight: 16 },
@@ -8,9 +10,19 @@ export const SYMBOLS = [
   { id: 'tart', label: 'Тарт', glyph: '🥧', tint: '#d4a574', weight: 14 },
   { id: 'choco', label: 'Шоколад', glyph: '🍫', tint: '#6b3f2a', weight: 13 },
   { id: 'berry', label: 'Ягодный', glyph: '🍓', tint: '#c23b4a', weight: 8 },
+  // Scatter: 3+ in one spin → +5 free spins (does not form cluster pays)
+  { id: SCATTER_ID, label: 'Free Spin', glyph: '🍭', tint: '#ffe08a', weight: 5, scatter: true },
 ];
 
 export const SYMBOL_BY_ID = Object.fromEntries(SYMBOLS.map((s) => [s.id, s]));
+
+export function isScatter(symbolId) {
+  return symbolId === SCATTER_ID;
+}
+
+export function countScatters(symbols) {
+  return symbols.reduce((n, id) => n + (isScatter(id) ? 1 : 0), 0);
+}
 
 /** Base cluster pays (cosmetic points) by size — Sugar Rush style curve. */
 export const CLUSTER_PAY = {
@@ -82,6 +94,8 @@ export function pickBiasedSymbol(symbols, index, gridSize, random = Math.random,
   }
 
   const weights = SYMBOLS.map((s) => {
+    // Scatters stay rare — no neighbour clustering bias.
+    if (s.scatter) return s.weight;
     const hits = boost.get(s.id) || 0;
     // Each neighbouring match multiplies weight by `bias` (~3× more similar drops).
     return s.weight * (hits > 0 ? bias * hits : 1);

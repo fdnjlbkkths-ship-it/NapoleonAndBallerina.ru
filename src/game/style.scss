@@ -291,14 +291,69 @@ body {
   color: #3a1e00;
 }
 
+/* Festive ×1024 — glow/shimmer only, cell box size unchanged */
 .cell.mult-tier-1024 {
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.35), transparent 42%),
+    radial-gradient(circle at 70% 80%, rgba(255, 77, 141, 0.28), transparent 45%),
+    var(--cell-mark);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.85),
-    0 0 14px rgba(255, 212, 90, 0.55);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9),
+    inset 0 0 12px rgba(255, 212, 90, 0.35),
+    0 0 16px rgba(255, 212, 90, 0.55);
+  animation: cell-1024-glow 1.6s ease-in-out infinite;
 }
+
+.cell.mult-tier-1024::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 10px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.9) 0 1.5px, transparent 2px),
+    radial-gradient(circle at 75% 25%, rgba(255, 212, 90, 0.95) 0 1.2px, transparent 2px),
+    radial-gradient(circle at 60% 70%, rgba(255, 255, 255, 0.85) 0 1px, transparent 1.8px),
+    radial-gradient(circle at 30% 78%, rgba(255, 77, 141, 0.9) 0 1.2px, transparent 2px);
+  opacity: 0.85;
+  animation: cell-1024-sparkle 1.2s steps(2, end) infinite;
+}
+
 .cell__mult.mult-tier-1024 {
-  background: linear-gradient(180deg, #ffffff, #ffd45a 40%, #ff2d6f);
+  background: linear-gradient(110deg, #ffffff 0%, #ffd45a 35%, #ff2d6f 70%, #ffe08a 100%);
+  background-size: 200% 100%;
   color: #2a0a18;
+  animation: mult-1024-shine 1.8s linear infinite;
+  box-shadow:
+    0 0 8px rgba(255, 212, 90, 0.8),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+@keyframes cell-1024-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}
+
+@keyframes cell-1024-sparkle {
+  0% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0.7; transform: scale(1); }
+}
+
+@keyframes mult-1024-shine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.cell.is-scatter {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(255, 224, 138, 0.35), transparent 60%),
+    var(--cell);
+  box-shadow: inset 0 0 0 1px rgba(255, 212, 90, 0.65);
+}
+
+.cell.is-scatter .cell__glyph {
+  filter: drop-shadow(0 0 6px rgba(255, 212, 90, 0.75));
 }
 
 .cell__mark-dot {

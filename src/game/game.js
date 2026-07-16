@@ -13,7 +13,7 @@ import {
   formatVardinShort,
   multTier,
 } from './engine.js';
-import { SYMBOL_BY_ID } from './symbols.js';
+import { SYMBOL_BY_ID, isScatter } from './symbols.js';
 import './style.scss';
 
 const tg = window.Telegram?.WebApp;
@@ -106,6 +106,7 @@ function paintBoard(symbols, multipliers, marks, winning = []) {
     const symbol = SYMBOL_BY_ID[symbols[i]];
     node.glyph.textContent = symbol ? symbol.glyph : '';
     node.el.classList.toggle('is-win', winSet.has(i));
+    node.el.classList.toggle('is-scatter', isScatter(symbols[i]));
     const m = multipliers[i] || 2;
     node.el.classList.add('is-marked');
     node.mark.classList.remove('is-on');
@@ -624,7 +625,9 @@ async function onSpin() {
       return;
     }
     await runResult(result);
-    if (result.retrigger) showToast(`+${result.retrigger} FREE SPINS`);
+    if (result.retrigger) {
+      showToast(`🍭 ×${result.scatterCount} → +${result.retrigger} FREE SPINS`);
+    }
     if (result.done) {
       els.overlayPoints.textContent = formatVardin(result.totalBonusWin);
       els.overlay.classList.add('is-open');
@@ -645,10 +648,17 @@ async function onSpin() {
   }
   els.status.textContent = 'Каскад…';
   await runResult(result);
-  els.status.textContent =
-    result.spinWin > 0
-      ? `Выигрыш ${formatVardin(result.spinWin)}`
-      : 'Все клетки ×2 · взрыв кластера удваивает множитель на этих полях';
+  if (result.triggeredBonus) {
+    showToast('🍭 ×3+ FREE SPINS!');
+    els.status.textContent = 'Бонус открыт · 3 Free Spin за спин дают +5';
+    updateHud();
+    paintBoard(state.symbols, state.multipliers, state.marks, []);
+  } else {
+    els.status.textContent =
+      result.spinWin > 0
+        ? `Выигрыш ${formatVardin(result.spinWin)}`
+        : '🍭 Free Spin: 3 за спин → +5 · кластер 5+ удваивает ×';
+  }
   setBusy(false);
 }
 
@@ -748,7 +758,8 @@ async function boot() {
 
   bind();
   updateHud();
-  els.status.textContent = 'Все клетки ×2 · кластер 5+ удваивает множитель и меняет цвет · 1 Вардин = 1 ₽';
+  els.status.textContent =
+    'Все ×2 · 🍭 Free Spin ×3 за спин → +5 · кластер удваивает множитель · 1 Вардин = 1 ₽';
   setSplashProgress(92);
   await wait(220);
 

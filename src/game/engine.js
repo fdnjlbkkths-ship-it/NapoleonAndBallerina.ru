@@ -6,7 +6,12 @@
  * Base: reset to all ×2 after a spin. Free spins: sticky.
  */
 
-import { payForCluster, pickBiasedSymbol } from './symbols.js';
+import {
+  payForCluster,
+  pickBiasedSymbol,
+  isScatter,
+  countScatters,
+} from './symbols.js';
 
 /** How much more often matching neighbours should drop (~3×). */
 export const MATCH_BIAS = 3;
@@ -15,6 +20,7 @@ export const GRID_SIZE = 7;
 export const MIN_CLUSTER = 5;
 export const FREE_SPINS_START = 10;
 export const FREE_SPINS_RETRIGGER = 5;
+export const SCATTER_RETRIGGER_NEED = 3;
 export const CURRENCY = 'Вардин';
 export const START_BALANCE = 100_000;
 export const BET_STEPS = [10, 20, 40, 50, 80, 100, 200, 400, 500, 1000];
@@ -126,7 +132,7 @@ export function findClusters(symbols) {
 
   for (let start = 0; start < symbols.length; start += 1) {
     const id = symbols[start];
-    if (!id || visited[start]) continue;
+    if (!id || visited[start] || isScatter(id)) continue;
 
     const queue = [start];
     const cells = [];
@@ -318,14 +324,17 @@ function runCascades(state) {
   const steps = [];
   let spinWin = 0;
   let guard = 0;
+  let maxScatters = countScatters(state.symbols);
   while (guard < 48) {
     const step = resolveTumbleStep(state);
     if (!step) break;
     steps.push(step);
     spinWin += step.stepWin;
+    maxScatters = Math.max(maxScatters, countScatters(step.symbolsAfter));
     guard += 1;
   }
-  return { steps, spinWin: +spinWin.toFixed(2) };
+  maxScatters = Math.max(maxScatters, countScatters(state.symbols));
+  return { steps, spinWin: +spinWin.toFixed(2), scatterCount: maxScatters };
 }
 
 export function canAfford(state, amount) {
@@ -360,18 +369,27 @@ export function playBaseSpin(state) {
     marks: [...state.marks],
   };
 
-  const { steps, spinWin } = runCascades(state);
+  const { steps, spinWin, scatterCount } = runCascades(state);
   state.lastWin = spinWin;
   state.balance = +(state.balance + spinWin).toFixed(2);
 
-  // Base: clear marks after spin sequence ends.
-  resetMarksIfBase(state);
+  // 3+ Free Spin scatters in base → enter bonus with 10 FS.
+  let triggeredBonus = false;
+  if (scatterCount >= SCATTER_RETRIGGER_NEED) {
+    startBonus(state, { superBonus: false });
+    triggeredBonus = true;
+  } else {
+    // Base: clear marks after spin sequence ends.
+    resetMarksIfBase(state);
+  }
 
   return {
     ok: true,
     opening,
     steps,
     spinWin,
+    scatterCount,
+    triggeredBonus,
     balance: state.balance,
     multipliers: [...state.multipliers],
     marks: [...state.marks],
@@ -434,14 +452,14 @@ export function playFreeSpin(state) {
     marks: [...state.marks],
   };
 
-  const { steps, spinWin } = runCascades(state);
+  const { steps, spinWin, scatterCount } = runCascades(state);
   state.lastWin = spinWin;
   state.totalBonusWin = +(state.totalBonusWin + spinWin).toFixed(2);
   state.balance = +(state.balance + spinWin).toFixed(2);
 
+  // 3 Free Spin symbols in one spin → +5 spins
   let retrigger = 0;
-  const hadBig = steps.some((s) => s.clusters.some((c) => c.size >= 10));
-  if (hadBig || state.random() < 0.035) {
+  if (scatterCount >= SCATTER_RETRIGGER_NEED) {
     retrigger = FREE_SPINS_RETRIGGER;
     state.spinsLeft += retrigger;
   }
@@ -459,6 +477,7 @@ export function playFreeSpin(state) {
     opening,
     steps,
     spinWin,
+    scatterCount,
     retrigger,
     spinsLeft: state.spinsLeft,
     totalBonusWin: state.totalBonusWin,
