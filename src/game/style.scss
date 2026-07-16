@@ -47,12 +47,14 @@ body {
 }
 
 .slot {
-  width: min(100%, 430px);
+  width: min(100%, 480px);
   margin: 0 auto;
-  padding: 10px 12px 18px;
+  padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  box-sizing: border-box;
 }
 
 .slot__header {
@@ -149,38 +151,36 @@ body {
 }
 
 .stage {
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 8px;
-  align-items: stretch;
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .buy-rail {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  justify-content: center;
 }
 
 .buy-rail .buy-btn {
-  flex: 1;
-  min-height: 96px;
-  display: grid;
-  place-content: center;
-  gap: 4px;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
-  padding: 10px 6px;
+  padding: 10px 12px;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   cursor: pointer;
   color: #fff;
   background: linear-gradient(180deg, #ff6b9d, #c2185b);
-  box-shadow: 0 5px 0 #8e0f3f;
+  box-shadow: 0 4px 0 #8e0f3f;
 }
 
 .buy-rail .buy-btn--super {
   background: linear-gradient(180deg, #ffb347, #ff6a00);
-  box-shadow: 0 5px 0 #b34800;
+  box-shadow: 0 4px 0 #b34800;
 }
 
 .buy-rail .buy-btn:disabled {
@@ -191,26 +191,32 @@ body {
 
 .buy-rail .buy-btn__title {
   font-family: var(--display);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.1;
 }
 
 .buy-rail .buy-btn__cost {
-  font-size: 0.68rem;
-  opacity: 0.92;
+  font-size: 0.75rem;
+  opacity: 0.95;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .board-wrap {
   position: relative;
-  padding: 8px;
-  border-radius: 22px;
+  width: min(100%, calc(100dvh - 210px));
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 6px;
+  border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06)),
     rgba(90, 25, 110, 0.45);
   border: 3px solid rgba(255, 210, 120, 0.55);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.28),
+    0 10px 28px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
   overflow: hidden;
 }
@@ -219,7 +225,7 @@ body {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   grid-template-rows: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
   aspect-ratio: 1;
   width: 100%;
   overflow: visible;
@@ -291,7 +297,6 @@ body {
   transform: scale(0.92);
   pointer-events: none;
   z-index: 1;
-  will-change: transform, opacity, filter;
   transform-origin: 50% 50%;
   background:
     radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.55), transparent 42%),
@@ -346,12 +351,12 @@ body {
   top: 50%;
   translate: -50% -50%;
   z-index: 6;
-  font-size: clamp(1.2rem, 5.6vw, 1.7rem);
+  font-size: clamp(1.25rem, 6.2vw, 1.85rem);
   line-height: 1;
   opacity: 0;
   pointer-events: none;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.28));
-  will-change: transform, opacity, filter;
+  /* Avoid heavy filters on every icon — they stutter on phones */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   transform-origin: 50% 50%;
 }
 
@@ -882,7 +887,8 @@ body {
 
 .hud {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .hud-bar {
@@ -1041,11 +1047,18 @@ body {
 }
 
 .hint {
+  display: none;
   margin: 0;
   text-align: center;
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.35;
+}
+
+@media (min-height: 720px) {
+  .hint {
+    display: block;
+  }
 }
 
 .toast {

@@ -31,6 +31,10 @@ import './style.scss';
 
 const tg = window.Telegram?.WebApp;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Phones / coarse pointers: lighter FX so icons stay visible and snappy. */
+const liteFx =
+  reduceMotion ||
+  window.matchMedia('(max-width: 720px), (pointer: coarse)').matches;
 
 const els = {
   board: document.getElementById('board'),
@@ -486,7 +490,7 @@ function clusterCenterInFx(cells) {
 
 /** Soft vapor wisps rising from a cell (not an explosion). */
 function puffVapor(cellIndex, count = 5) {
-  if (reduceMotion) return;
+  if (reduceMotion || liteFx) return;
   const { x, y } = cellCenterInFx(cellIndex);
   for (let i = 0; i < count; i += 1) {
     const mist = spawnFxNode('vapor', x, y);
@@ -506,7 +510,7 @@ function puffVapor(cellIndex, count = 5) {
         y: gsap.utils.random(-36, -18),
         scale: gsap.utils.random(1.2, 1.8),
         opacity: 0,
-        duration: gsap.utils.random(0.45, 0.75),
+        duration: gsap.utils.random(0.35, 0.55),
         ease: 'power1.out',
         onComplete: () => mist.remove(),
       },
@@ -526,42 +530,21 @@ async function explodeCells(winningCells) {
 
   winningCells.forEach((i) => cellNodes[i].el.classList.add('is-vanishing'));
 
-  // Soft brighten, then rise + fade + blur (evaporate)
+  // Opacity + scale only (no blur/filter — those stall emoji on phones)
+  const dur = liteFx ? 0.22 : 0.34;
   await gsap
     .timeline()
-    .to(winTiles, {
-      filter: 'brightness(1.35) saturate(1.15)',
-      duration: 0.18,
-      ease: 'power1.out',
-      stagger: { each: 0.015, from: 'center' },
-    }, 0)
-    .to(winGlyphs, {
-      filter: 'brightness(1.4) saturate(1.1)',
-      duration: 0.18,
-      ease: 'power1.out',
-      stagger: { each: 0.015, from: 'center' },
-    }, 0)
-    .to(winTiles, {
-      y: -10,
+    .to([winTiles, winGlyphs], {
+      y: liteFx ? -6 : -10,
       scale: 0.55,
       opacity: 0,
-      filter: 'brightness(1.6) blur(6px)',
-      duration: 0.42,
+      duration: dur,
       ease: 'power2.in',
-      stagger: { each: 0.018, from: 'center' },
-    })
-    .to(winGlyphs, {
-      y: -14,
-      scale: 0.45,
-      opacity: 0,
-      filter: 'brightness(1.7) blur(5px)',
-      duration: 0.42,
-      ease: 'power2.in',
-      stagger: { each: 0.018, from: 'center' },
-    }, '<');
+      stagger: { each: liteFx ? 0.008 : 0.014, from: 'center' },
+    });
 
   winningCells.forEach((i) => {
-    puffVapor(i, 4);
+    if (!liteFx) puffVapor(i, 3);
     hideTile(cellNodes[i]);
     cellNodes[i].el.classList.remove('is-vanishing');
     gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
@@ -715,8 +698,30 @@ function animateDropIn(symbols, multipliers, marks) {
   paintBoard(symbols, multipliers, marks, []);
   if (reduceMotion) return Promise.resolve();
 
+  // Mobile: animate real tiles (no 49 fly clones) so icons stay sharp.
+  if (liteFx) {
+    const tiles = [];
+    const glyphs = [];
+    cellNodes.forEach((n, i) => {
+      if (!symbols[i]) return;
+      tiles.push(n.tile);
+      glyphs.push(n.glyph);
+    });
+    gsap.set([...tiles, ...glyphs], { opacity: 0, y: -18, scale: 0.92 });
+    return gsap.to([...tiles, ...glyphs], {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      duration: 0.28,
+      ease: 'power2.out',
+      stagger: { each: 0.012, from: 'start' },
+      onComplete: () => {
+        gsap.set([...tiles, ...glyphs], { clearProps: 'opacity,transform' });
+      },
+    });
+  }
+
   const size = cellSize();
-  // Hide tiles + glyphs — fly clones fall into place.
   cellNodes.forEach((n) => {
     gsap.set([n.tile, n.glyph], { opacity: 0 });
   });
@@ -745,8 +750,8 @@ function animateDropIn(symbols, multipliers, marks) {
           x: 0,
           y: 0,
           scale: 1,
-          duration: 0.52 + r * 0.02,
-          ease: 'bounce.out',
+          duration: 0.4 + r * 0.015,
+          ease: 'power2.out',
           onComplete: () => {
             gsap.set([cellNodes[i].tile, cellNodes[i].glyph], {
               opacity: 1,
@@ -757,7 +762,7 @@ function animateDropIn(symbols, multipliers, marks) {
         },
         t,
       );
-      t += 0.045;
+      t += 0.028;
     }
   }
   return tl;
@@ -849,17 +854,38 @@ async function animateCascadeFalls(step) {
     step.winningCells.includes(i) ? null : s,
   );
 
-  // Show holes where clusters exploded; survivors still in old seats.
   paintBoard(afterExplode, step.multipliersAfter, step.marksAfter, []);
 
-  if (reduceMotion) {
+  if (reduceMotion || liteFx) {
+    // Fast path: paint gravity + drops immediately, short pop-in for new icons
     paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+    if (liteFx && !reduceMotion) {
+      const dropNodes = (step.newDropCells || []).flatMap((i) => [
+        cellNodes[i].tile,
+        cellNodes[i].glyph,
+      ]);
+      if (dropNodes.length) {
+        gsap.fromTo(
+          dropNodes,
+          { opacity: 0, y: -14, scale: 0.9 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.22,
+            ease: 'power2.out',
+            stagger: 0.01,
+            onComplete: () => gsap.set(dropNodes, { clearProps: 'opacity,transform' }),
+          },
+        );
+        await wait(240);
+      }
+    }
     return;
   }
 
   const moves = step.moves || [];
   if (moves.length) {
-    // Hide moving sources — candy clones travel to destination cells.
     for (const move of moves) {
       hideTile(cellNodes[move.from]);
     }
@@ -869,17 +895,15 @@ async function animateCascadeFalls(step) {
       const from = cellCenterInFx(move.from);
       const to = cellCenterInFx(move.to);
       const fly = spawnFlyTile(move.from, move.id);
-
-      // Slight stagger by column so it reads as gravity, not a teleport.
       const col = move.to % GRID_SIZE;
-      const start = col * 0.02 + order * 0.008;
+      const start = col * 0.015 + order * 0.006;
 
       slideTl.to(
         fly,
         {
           x: to.x - from.x,
           y: to.y - from.y,
-          duration: 0.34 + move.rows * 0.09,
+          duration: 0.26 + move.rows * 0.06,
           ease: 'power3.in',
           onComplete: () => fly.remove(),
         },
@@ -889,7 +913,6 @@ async function animateCascadeFalls(step) {
     await slideTl;
   }
 
-  // Board after gravity: survivors seated, top holes empty.
   paintBoard(step.symbolsAfterGravity, step.multipliersAfter, step.marksAfter, []);
 
   const drops = step.newDropCells || [];
@@ -898,7 +921,6 @@ async function animateCascadeFalls(step) {
     return;
   }
 
-  // Pre-paint final symbols into DOM but keep tiles/glyphs invisible until each lands.
   paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
   for (const i of drops) {
     gsap.set([cellNodes[i].tile, cellNodes[i].glyph], { opacity: 0 });
@@ -906,7 +928,6 @@ async function animateCascadeFalls(step) {
 
   const dropTl = gsap.timeline();
   let t = 0;
-  // Drop column by column, top row first (as they enter the board).
   for (let c = 0; c < GRID_SIZE; c += 1) {
     const colDrops = drops
       .filter((i) => i % GRID_SIZE === c)
@@ -924,8 +945,8 @@ async function animateCascadeFalls(step) {
           x: 0,
           y: 0,
           scale: 1,
-          duration: 0.48 + orderInCol * 0.04,
-          ease: 'bounce.out',
+          duration: 0.32 + orderInCol * 0.03,
+          ease: 'power2.out',
           onComplete: () => {
             revealTile(cellNodes[i]);
             fly.remove();
@@ -933,7 +954,7 @@ async function animateCascadeFalls(step) {
         },
         t,
       );
-      t += 0.075;
+      t += 0.04;
     });
   }
 
@@ -966,9 +987,9 @@ async function animateStep(step) {
   }
 
   await animateUpgrades(step.upgrades);
-  await wait(160);
+  await wait(liteFx ? 40 : 100);
   await animateCascadeFalls(step);
-  await wait(200);
+  await wait(liteFx ? 60 : 140);
 }
 
 async function runResult(result) {
@@ -1144,38 +1165,31 @@ async function hideSplash() {
 }
 
 async function boot() {
-  setSplashProgress(8);
+  setSplashProgress(12);
   initTelegram();
-  setSplashProgress(18);
-  await wait(120);
+  setSplashProgress(28);
 
   restoreFromCache();
-  setSplashProgress(34);
-  await wait(120);
+  setSplashProgress(42);
 
   buildBoard();
-  setSplashProgress(55);
-  await wait(140);
+  setSplashProgress(60);
 
   fillEmptyCells(state);
   paintBoard(state.symbols, state.multipliers, state.marks, []);
-  setSplashProgress(74);
-  await wait(140);
+  setSplashProgress(78);
 
   bind();
   updateHud();
   saveCache();
   els.status.textContent =
     `С возвращением, ${getTelegramUserName()} · sticky × · 🍭FS · баллы→скидка`;
-  setSplashProgress(92);
-  await wait(180);
-
   setSplashProgress(100);
-  await wait(160);
+  await wait(liteFx ? 80 : 160);
   await hideSplash();
 
-  if (!reduceMotion) {
-    gsap.from('.slot', { opacity: 0, y: 16, duration: 0.45, ease: 'power2.out' });
+  if (!reduceMotion && !liteFx) {
+    gsap.from('.slot', { opacity: 0, y: 12, duration: 0.35, ease: 'power2.out' });
   }
 }
 
