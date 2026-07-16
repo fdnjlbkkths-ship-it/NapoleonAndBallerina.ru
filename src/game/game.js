@@ -54,6 +54,9 @@ const els = {
   status: document.getElementById('status'),
   winBanner: document.getElementById('win-banner'),
   winBannerText: document.getElementById('win-banner-text'),
+  fsAward: document.getElementById('fs-award'),
+  fsAwardCard: document.getElementById('fs-award-card'),
+  fsAwardValue: document.getElementById('fs-award-value'),
   overlay: document.getElementById('overlay'),
   overlayPoints: document.getElementById('overlay-points'),
   overlayClose: document.getElementById('overlay-close'),
@@ -506,6 +509,83 @@ async function showWinBanner(amount) {
   els.winBanner.classList.add('is-hidden');
 }
 
+/** Big center celebration when Free Spins are awarded (+5 etc.). */
+async function showFreeSpinsAward(amount = 5) {
+  if (!els.fsAward || !amount) return;
+
+  els.fsAward.classList.remove('is-hidden');
+  els.fsAwardValue.textContent = `+${amount}`;
+  gsap.set(els.fsAward, { opacity: 1 });
+  gsap.set(els.fsAwardCard, { scale: 0.55, rotation: -8, opacity: 0 });
+
+  if (tg?.HapticFeedback) {
+    try {
+      tg.HapticFeedback.notificationOccurred('success');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Confetti sparks around the card
+  if (!reduceMotion) {
+    const rect = els.fsAwardCard.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    for (let i = 0; i < 18; i += 1) {
+      const spark = document.createElement('div');
+      spark.className = 'fs-award__spark';
+      spark.style.left = `${cx}px`;
+      spark.style.top = `${cy}px`;
+      spark.style.position = 'fixed';
+      spark.style.zIndex = '51';
+      document.body.appendChild(spark);
+      const angle = (Math.PI * 2 * i) / 18;
+      const dist = gsap.utils.random(60, 130);
+      gsap.to(spark, {
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist,
+        opacity: 0,
+        scale: 0,
+        duration: 0.85,
+        ease: 'power2.out',
+        onComplete: () => spark.remove(),
+      });
+    }
+  }
+
+  await gsap
+    .timeline()
+    .to(els.fsAwardCard, {
+      scale: 1.08,
+      rotation: 0,
+      opacity: 1,
+      duration: reduceMotion ? 0.01 : 0.45,
+      ease: 'back.out(1.8)',
+    })
+    .to(els.fsAwardCard, {
+      scale: 1,
+      duration: reduceMotion ? 0.01 : 0.18,
+      ease: 'power2.out',
+    })
+    .to(els.fsAwardValue, {
+      scale: 1.15,
+      duration: reduceMotion ? 0.01 : 0.22,
+      yoyo: true,
+      repeat: 1,
+      ease: 'power1.inOut',
+    });
+
+  await wait(1100);
+
+  await gsap.to(els.fsAward, {
+    opacity: 0,
+    duration: reduceMotion ? 0.01 : 0.35,
+    ease: 'power2.in',
+  });
+  els.fsAward.classList.add('is-hidden');
+  gsap.set(els.fsAwardCard, { clearProps: 'transform,opacity' });
+}
+
 /** Initial fill: pieces fall from above the board into each cell. */
 function animateDropIn(symbols, multipliers, marks) {
   paintBoard(symbols, multipliers, marks, []);
@@ -762,6 +842,7 @@ async function onSpin() {
     }
     await runResult(result);
     if (result.retrigger) {
+      await showFreeSpinsAward(result.retrigger);
       showToast(`🍭 ×${result.scatterCount} → +${result.retrigger} FREE SPINS`);
     }
     if (result.done) {
@@ -786,7 +867,8 @@ async function onSpin() {
   await runResult(result);
   saveCache();
   if (result.triggeredBonus) {
-    showToast('🍭 ×3+ FREE SPINS!');
+    await showFreeSpinsAward(10);
+    showToast('🍭 ×3+ бонус открыт!');
     els.status.textContent = 'Бонус открыт · 3 Free Spin за спин дают +5';
     updateHud();
     paintBoard(state.symbols, state.multipliers, state.marks, []);
