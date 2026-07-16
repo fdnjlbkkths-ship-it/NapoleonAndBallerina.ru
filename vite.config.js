@@ -9,7 +9,11 @@ export default defineConfig({
         menu: resolve(__dirname, 'menu.html'),
         about: resolve(__dirname, 'about.html'),
         contacts: resolve(__dirname, 'contacts.html'),
+        game: resolve(__dirname, 'game.html'),
       },
     },
+  },
+  server: {
+    host: true,
   },
 });
