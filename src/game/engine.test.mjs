@@ -12,7 +12,6 @@ import {
   playBaseSpin,
   buyBonus,
   playFreeSpin,
-  buildSuperMultiplierGrid,
   nextMultiplier,
   multTier,
 } from './engine.js';
@@ -63,10 +62,12 @@ function seeded(seed = 1) {
 }
 
 {
-  const grid = buildSuperMultiplierGrid();
-  const center = Math.floor((GRID_SIZE * GRID_SIZE) / 2);
-  assert.equal(grid[center], 16);
-  assert.ok(grid.every((m) => m >= 2));
+  const state = createGameState(seeded(21));
+  state.bet = 100;
+  const bought = buyBonus(state, { superBonus: true });
+  assert.equal(bought.ok, true);
+  assert.equal(state.mode, 'super');
+  assert.ok(state.multipliers.every((m) => m === 2));
 }
 
 {

@@ -495,21 +495,6 @@ async function animateCascadeFalls(step) {
 async function animateStep(step) {
   paintBoard(step.symbolsBefore, step.multipliersBefore, step.marksBefore, step.winningCells);
 
-  // Subtle pre-highlight before the pop
-  if (!reduceMotion) {
-    const winEls = step.winningCells.map((i) => cellNodes[i].el);
-    await gsap.fromTo(
-      winEls,
-      { boxShadow: 'inset 0 0 0 0 rgba(255,255,255,0)' },
-      {
-        boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.7)',
-        duration: 0.2,
-        stagger: { each: 0.015, from: 'center' },
-        ease: 'sine.out',
-      },
-    );
-  }
-
   floatWin(step.stepWin);
   if (tg?.HapticFeedback) {
     try {
@@ -595,7 +580,7 @@ function openBuy(kind) {
   els.buyOverlayTitle.textContent = kind === 'super' ? 'SUPER FREE SPINS' : 'BUY FREE SPINS';
   els.buyOverlayText.textContent =
     kind === 'super'
-      ? '10 фриспинов · поле с усиленными множителями (центр ×16)'
+      ? '10 фриспинов · все клетки ×2, при взрыве удваиваются и липнут'
       : '10 фриспинов · все клетки ×2, при взрыве удваиваются и липнут';
   els.buyOverlayPrice.textContent = formatVardin(cost);
   els.buyOverlay.classList.add('is-open');

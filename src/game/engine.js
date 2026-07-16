@@ -381,14 +381,9 @@ function startBonus(state, { superBonus = false } = {}) {
   state.finishedBonus = false;
   state.lastWin = 0;
 
-  if (superBonus) {
-    state.multipliers = buildSuperMultiplierGrid();
-    state.marks = state.multipliers.map((m) => m > 0);
-  } else {
-    // Regular bonus: every cell starts at ×2 (sticky, doubles on each explode).
-    state.multipliers = fillAllMultipliers(2);
-    state.marks = createEmptyGrid(true);
-  }
+  // BUY and SUPER BUY: every cell starts at ×2 (sticky, doubles on each explode).
+  state.multipliers = fillAllMultipliers(2);
+  state.marks = createEmptyGrid(true);
 
   state.symbols = createEmptyGrid(null);
   fillEmptyCells(state);
