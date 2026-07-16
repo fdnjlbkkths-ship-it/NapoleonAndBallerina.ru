@@ -116,6 +116,7 @@ function paintBoard(symbols, multipliers, marks, winning = []) {
     const tier = multTier(m);
     node.mult.classList.add(`mult-tier-${tier}`);
     node.el.classList.add(`mult-tier-${tier}`);
+    gsap.set(node.mult, { scale: 1, clearProps: 'transform,filter,fontSize' });
   }
 }
 
@@ -421,6 +422,7 @@ function animateDropIn(symbols, multipliers, marks) {
 
 async function animateUpgrades(upgrades) {
   const tl = gsap.timeline();
+  const multEls = [];
   for (const up of upgrades) {
     const node = cellNodes[up.cell];
     const m = up.after.mult;
@@ -431,16 +433,26 @@ async function animateUpgrades(upgrades) {
     const tier = multTier(m);
     node.mult.classList.add(`mult-tier-${tier}`);
     node.el.classList.add(`mult-tier-${tier}`);
+    // Always lock final size to ×2 badge (no leftover GSAP scale).
+    gsap.set(node.mult, { scale: 1, clearProps: 'fontSize,lineHeight,width,height' });
+    multEls.push(node.mult);
     if (!reduceMotion) {
+      // Pulse via brightness only — size stays identical to ×2.
       tl.fromTo(
         node.mult,
-        { scale: 0.55, opacity: 0.5 },
-        { scale: 1.25, opacity: 1, duration: 0.35, ease: 'back.out(2.2)', yoyo: true, repeat: 1 },
-        '<0.04',
+        { autoAlpha: 0.55, filter: 'brightness(1.6)' },
+        {
+          autoAlpha: 1,
+          filter: 'brightness(1)',
+          duration: 0.32,
+          ease: 'power2.out',
+        },
+        '<0.03',
       );
     }
   }
   if (!reduceMotion) await tl;
+  gsap.set(multEls, { scale: 1, clearProps: 'transform,filter' });
 }
 
 /** Existing pieces slide down, then new ones drop from top one-by-one. */
