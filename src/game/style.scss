@@ -128,6 +128,7 @@ body {
   box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  overflow: hidden; /* clip pieces entering from above the board frame */
 }
 
 .board {
@@ -137,6 +138,7 @@ body {
   gap: 4px;
   aspect-ratio: 1;
   width: 100%;
+  overflow: visible;
 }
 
 .cell {
@@ -150,7 +152,7 @@ body {
   background: var(--cell);
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
   /* Size never changes — animate only glyphs / FX, not the cell box */
   transform: none !important;
 }

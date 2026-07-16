@@ -182,6 +182,7 @@ export function applyExplodeMarks(state, winningCells) {
 
 function applyGravityWithFalls(symbols) {
   const fallDistance = createEmptyGrid(0);
+  const moves = []; // { from, to, id, rows }
 
   for (let c = 0; c < GRID_SIZE; c += 1) {
     const stack = [];
@@ -192,9 +193,13 @@ function applyGravityWithFalls(symbols) {
     let writeR = GRID_SIZE - 1;
     for (const item of stack) {
       const to = idx(writeR, c);
+      const from = idx(item.fromR, c);
       symbols[to] = item.id;
-      // row 0 = top; falling down increases row index
-      fallDistance[to] = writeR - item.fromR;
+      const rows = writeR - item.fromR;
+      fallDistance[to] = rows;
+      if (rows > 0) {
+        moves.push({ from, to, id: item.id, rows });
+      }
       writeR -= 1;
     }
     while (writeR >= 0) {
@@ -205,7 +210,7 @@ function applyGravityWithFalls(symbols) {
     }
   }
 
-  return { fallDistance };
+  return { fallDistance, moves };
 }
 
 export function resolveTumbleStep(state) {
@@ -245,13 +250,11 @@ export function resolveTumbleStep(state) {
 
   // Exploded cells double their multipliers (all start at ×2).
   const upgrades = applyExplodeMarks(state, uniqueWins);
+  const symbolsAfterExplode = [...state.symbols];
 
-  const { fallDistance } = applyGravityWithFalls(state.symbols);
+  const { fallDistance, moves } = applyGravityWithFalls(state.symbols);
   const symbolsAfterGravity = [...state.symbols];
-  const slideCells = [];
-  for (let i = 0; i < fallDistance.length; i += 1) {
-    if (fallDistance[i] > 0 && symbolsAfterGravity[i]) slideCells.push(i);
-  }
+  const slideCells = moves.map((m) => m.to);
 
   // New pieces drop from the top — listed top→bottom, left→right for sequential anim.
   // Fill bottom empties first within each column so bias sees pieces below.
@@ -290,8 +293,10 @@ export function resolveTumbleStep(state) {
     stepWin: +stepWin.toFixed(2),
     upgrades,
     fallDistance: [...fallDistance],
+    moves,
     slideCells,
     newDropCells,
+    symbolsAfterExplode,
     symbolsAfterGravity,
     symbolsBefore,
     multipliersBefore,

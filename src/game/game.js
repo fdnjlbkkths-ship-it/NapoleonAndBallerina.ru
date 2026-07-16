@@ -369,30 +369,51 @@ async function showWinBanner(amount) {
   els.winBanner.classList.add('is-hidden');
 }
 
-/** Drop every cell from top, column by column, one after another. */
+/** Initial fill: pieces fall from above the board into each cell. */
 function animateDropIn(symbols, multipliers, marks) {
   paintBoard(symbols, multipliers, marks, []);
   if (reduceMotion) return Promise.resolve();
 
   const size = cellSize();
-  const tl = gsap.timeline();
+  // Hide glyphs — fly clones fall into place.
+  cellNodes.forEach((n) => {
+    gsap.set(n.glyph, { opacity: 0 });
+  });
+
+  const tl = gsap.timeline({
+    onComplete: () => {
+      cellNodes.forEach((n) => gsap.set(n.glyph, { clearProps: 'opacity,transform' }));
+    },
+  });
+
   let t = 0;
   for (let c = 0; c < GRID_SIZE; c += 1) {
     for (let r = 0; r < GRID_SIZE; r += 1) {
       const i = r * GRID_SIZE + c;
-      const glyph = cellNodes[i].glyph;
-      gsap.set(glyph, { y: -size * (r + 2), opacity: 0 });
-      tl.to(
-        glyph,
+      const id = symbols[i];
+      if (!id) continue;
+      const { x, y } = cellCenterInFx(i);
+      const fly = spawnFxNode('fly-glyph', x, y);
+      fly.textContent = SYMBOL_BY_ID[id]?.glyph || '';
+      fly.style.fontSize = getComputedStyle(cellNodes[i].glyph).fontSize;
+      const startY = -(r + 2.2) * size;
+
+      tl.fromTo(
+        fly,
+        { x: 0, y: startY, xPercent: -50, yPercent: -50, opacity: 1 },
         {
+          x: 0,
           y: 0,
-          opacity: 1,
-          duration: 0.55,
+          duration: 0.52 + r * 0.02,
           ease: 'bounce.out',
+          onComplete: () => {
+            cellNodes[i].glyph.style.opacity = '1';
+            fly.remove();
+          },
         },
         t,
       );
-      t += 0.055;
+      t += 0.045;
     }
   }
   return tl;
@@ -433,63 +454,122 @@ async function animateUpgrades(upgrades) {
   gsap.set(multEls, { scale: 1, clearProps: 'transform,filter' });
 }
 
-/** Existing pieces slide down, then new ones drop from top one-by-one. */
+/**
+ * True cascade:
+ * 1) board with holes after explode
+ * 2) pieces above fall down into empty slots
+ * 3) new pieces fall from above the board into remaining holes
+ */
 async function animateCascadeFalls(step) {
   const size = cellSize();
+  const afterExplode = step.symbolsAfterExplode || step.symbolsBefore.map((s, i) =>
+    step.winningCells.includes(i) ? null : s,
+  );
 
-  // 1) Show board after gravity (holes on top), slide survivors down.
+  // Show holes where clusters exploded; survivors still in old seats.
+  paintBoard(afterExplode, step.multipliersAfter, step.marksAfter, []);
+
+  if (reduceMotion) {
+    paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+    return;
+  }
+
+  const moves = step.moves || [];
+  if (moves.length) {
+    // Hide moving sources — clones travel to destination cells.
+    for (const move of moves) {
+      cellNodes[move.from].glyph.textContent = '';
+    }
+
+    const slideTl = gsap.timeline();
+    moves.forEach((move, order) => {
+      const from = cellCenterInFx(move.from);
+      const to = cellCenterInFx(move.to);
+      const fly = spawnFxNode('fly-glyph', from.x, from.y);
+      fly.textContent = SYMBOL_BY_ID[move.id]?.glyph || '';
+      fly.style.fontSize = getComputedStyle(cellNodes[move.to].glyph).fontSize;
+      gsap.set(fly, { xPercent: -50, yPercent: -50, x: 0, y: 0 });
+
+      // Slight stagger by column so it reads as gravity, not a teleport.
+      const col = move.to % GRID_SIZE;
+      const start = col * 0.02 + order * 0.008;
+
+      slideTl.to(
+        fly,
+        {
+          x: to.x - from.x,
+          y: to.y - from.y,
+          duration: 0.28 + move.rows * 0.07,
+          ease: 'power2.in',
+          onComplete: () => fly.remove(),
+        },
+        start,
+      );
+    });
+    await slideTl;
+  }
+
+  // Board after gravity: survivors seated, top holes empty.
   paintBoard(step.symbolsAfterGravity, step.multipliersAfter, step.marksAfter, []);
-  for (const i of step.newDropCells || []) {
+
+  const drops = step.newDropCells || [];
+  if (!drops.length) {
+    paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
+    return;
+  }
+
+  // Hide destinations, drop new pieces from above the board one-by-one.
+  for (const i of drops) {
     cellNodes[i].glyph.textContent = '';
   }
 
-  if (!reduceMotion && step.slideCells?.length) {
-    const tl = gsap.timeline();
-    for (const i of step.slideCells) {
-      const dist = step.fallDistance[i] || 0;
-      if (dist <= 0) continue;
-      gsap.set(cellNodes[i].glyph, { y: -dist * size });
-      tl.to(
-        cellNodes[i].glyph,
-        { y: 0, duration: 0.5, ease: 'power2.out' },
-        0,
-      );
-    }
-    await tl;
-  }
-
-  // 2) New blocks fall from above one after another (column → row).
+  // Pre-paint final symbols into DOM but keep glyphs invisible until each lands.
   paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
-  if (reduceMotion) return;
-
-  const drops = step.newDropCells || [];
-  // Hide new drops first, keep others in place.
   for (const i of drops) {
-    gsap.set(cellNodes[i].glyph, { y: -size * (step.fallDistance[i] || 2), opacity: 0 });
+    gsap.set(cellNodes[i].glyph, { opacity: 0 });
   }
 
-  const tl = gsap.timeline();
+  const dropTl = gsap.timeline();
   let t = 0;
-  for (const i of drops) {
-    const dist = Math.max(2, step.fallDistance[i] || 2);
-    tl.fromTo(
-      cellNodes[i].glyph,
-      { y: -dist * size, opacity: 0 },
-      {
-        y: 0,
-        opacity: 1,
-        duration: 0.58,
-        ease: 'bounce.out',
-      },
-      t,
-    );
-    t += 0.09; // друг за другом
+  // Drop column by column, top row first (as they enter the board).
+  for (let c = 0; c < GRID_SIZE; c += 1) {
+    const colDrops = drops
+      .filter((i) => i % GRID_SIZE === c)
+      .sort((a, b) => a - b);
+    colDrops.forEach((i, orderInCol) => {
+      const id = step.symbolsAfter[i];
+      const { x, y } = cellCenterInFx(i);
+      const fly = spawnFxNode('fly-glyph', x, y);
+      fly.textContent = SYMBOL_BY_ID[id]?.glyph || '';
+      fly.style.fontSize = getComputedStyle(cellNodes[i].glyph).fontSize;
+      const rowsFall = Math.max(2, step.fallDistance[i] || 2);
+      const startY = -(rowsFall + 1.2) * size;
+
+      dropTl.fromTo(
+        fly,
+        { x: 0, y: startY, xPercent: -50, yPercent: -50, opacity: 1 },
+        {
+          x: 0,
+          y: 0,
+          duration: 0.48 + orderInCol * 0.04,
+          ease: 'bounce.out',
+          onComplete: () => {
+            gsap.set(cellNodes[i].glyph, { opacity: 1, clearProps: 'opacity' });
+            fly.remove();
+          },
+        },
+        t,
+      );
+      t += 0.075;
+    });
   }
-  await tl;
+
+  await dropTl;
   gsap.set(
     cellNodes.map((n) => n.glyph),
     { clearProps: 'transform,opacity' },
   );
+  paintBoard(step.symbolsAfter, step.multipliersAfter, step.marksAfter, []);
 }
 
 async function animateStep(step) {
