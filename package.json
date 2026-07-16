@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:game": "node src/game/engine.test.mjs && node src/game/promo.test.mjs"
   },
   "devDependencies": {
     "sass": "^1.77.0",
