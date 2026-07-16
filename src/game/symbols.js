@@ -3,15 +3,15 @@
 export const SCATTER_ID = 'freespin';
 
 export const SYMBOLS = [
-  { id: 'eclair', label: 'Эклер', glyph: '🥐', tint: '#c47a4a', weight: 18 },
-  { id: 'pavlova', label: 'Анна Павлова', glyph: '🍨', tint: '#f3d6e0', weight: 16 },
-  { id: 'cake', label: 'Тортик', glyph: '🎂', tint: '#e8b4b8', weight: 16 },
-  { id: 'macaron', label: 'Макарон', glyph: '🧁', tint: '#d4a5c9', weight: 15 },
-  { id: 'tart', label: 'Тарт', glyph: '🥧', tint: '#d4a574', weight: 14 },
-  { id: 'choco', label: 'Шоколад', glyph: '🍫', tint: '#6b3f2a', weight: 13 },
-  { id: 'berry', label: 'Ягодный', glyph: '🍓', tint: '#c23b4a', weight: 8 },
-  // Scatter: 3+ in one spin → +5 free spins (does not form cluster pays)
-  { id: SCATTER_ID, label: 'Free Spin', glyph: '🍭', tint: '#ffe08a', weight: 5, scatter: true },
+  { id: 'eclair', label: 'Эклер', glyph: '🥐', tint: '#e8a060', deep: '#b86a2e', weight: 18 },
+  { id: 'pavlova', label: 'Анна Павлова', glyph: '🍨', tint: '#ffe4f0', deep: '#f0a0c0', weight: 16 },
+  { id: 'cake', label: 'Тортик', glyph: '🎂', tint: '#ffb7c5', deep: '#e86b8a', weight: 16 },
+  { id: 'macaron', label: 'Макарон', glyph: '🧁', tint: '#e0b4ff', deep: '#a86be0', weight: 15 },
+  { id: 'tart', label: 'Тарт', glyph: '🥧', tint: '#ffd28a', deep: '#e09a3a', weight: 14 },
+  { id: 'choco', label: 'Шоколад', glyph: '🍫', tint: '#8b5a3c', deep: '#4a2614', weight: 13 },
+  { id: 'berry', label: 'Ягодный', glyph: '🍓', tint: '#ff6b7a', deep: '#c2283a', weight: 8 },
+  // Scatter: 3+ in one spin → free spins (does not form cluster pays)
+  { id: SCATTER_ID, label: 'Free Spin', glyph: '🍭', tint: '#ffe08a', deep: '#ff4d8d', weight: 5, scatter: true },
 ];
 
 export const SYMBOL_BY_ID = Object.fromEntries(SYMBOLS.map((s) => [s.id, s]));
