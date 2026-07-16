@@ -355,12 +355,13 @@ body {
 
 .cell__mult {
   position: absolute;
-  left: auto;
-  right: 1px;
-  top: auto;
-  bottom: 1px;
-  translate: none;
-  /* Always bottom-right of the cell */
+  left: auto !important;
+  right: 1px !important;
+  top: auto !important;
+  bottom: 1px !important;
+  translate: none !important;
+  /* Always bottom-right — scale from this corner on multiply */
+  transform-origin: 100% 100%;
   height: 1.05rem;
   min-width: 1.05rem;
   width: max-content;
@@ -605,14 +606,15 @@ body {
 
 .cell__mark-dot {
   position: absolute;
-  left: auto;
-  right: 3px;
-  top: auto;
-  bottom: 3px;
+  left: auto !important;
+  right: 3px !important;
+  top: auto !important;
+  bottom: 3px !important;
   margin: 0;
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  transform-origin: 100% 100%;
   background: radial-gradient(circle at 35% 30%, #fff6c8, #ffd45a 55%, #f0a020);
   box-shadow:
     0 0 8px rgba(255, 212, 90, 0.85),

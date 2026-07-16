@@ -1,10 +1,13 @@
 /**
  * Sugar Rush 1000–style engine (demo, currency: Вардин 1:1 ₽).
  *
- * Multiplier spots are sticky on the grid:
- * they do not move with falling symbols and do not grow on explode.
- * Base: marks/mults reset after each spin. Free spins: sticky.
- * Super Free Spins: every cell starts at ×2 and stays there.
+ * Sticky multiplier spots (stay on the cell, corner badge in UI):
+ * 1) first explode on a cell → mark
+ * 2) second explode → ×2
+ * 3) further explodes → ×4 … ×1024
+ * Spots do not move with falling symbols.
+ * Base: marks reset after each spin. Free spins: sticky.
+ * Super Free Spins: every cell starts at ×2.
  */
 
 import {
@@ -192,22 +195,35 @@ export function findClusters(symbols) {
 }
 
 /**
- * Sticky spots: leave marks/multipliers unchanged on explode.
- * Values stay on their cells while symbols clear and cascade around them.
+ * Sticky spots: mark → ×2 → ×4 → … → ×1024 on each explode.
+ * Values stay on the same grid cell (UI keeps the badge in the corner).
  */
 export function applyExplodeMarks(state, winningCells) {
   const upgrades = [];
   const unique = [...new Set(winningCells)];
 
   for (const cell of unique) {
-    const snap = {
+    const before = {
       marked: Boolean(state.marks[cell]),
       mult: state.multipliers[cell] || 0,
     };
+
+    if (state.multipliers[cell] > 0) {
+      state.multipliers[cell] = nextMultiplier(state.multipliers[cell]);
+      state.marks[cell] = true;
+    } else if (state.marks[cell]) {
+      state.multipliers[cell] = MULT_LADDER[0];
+    } else {
+      state.marks[cell] = true;
+    }
+
     upgrades.push({
       cell,
-      before: snap,
-      after: { ...snap },
+      before,
+      after: {
+        marked: Boolean(state.marks[cell]),
+        mult: state.multipliers[cell] || 0,
+      },
     });
   }
 
@@ -282,7 +298,7 @@ export function resolveTumbleStep(state) {
   const uniqueWins = [...new Set(winningCells)];
   for (const cell of uniqueWins) state.symbols[cell] = null;
 
-  // Keep sticky multipliers on the same cells (no grow, no move).
+  // Upgrade sticky spots on exploded cells (badges stay on that cell).
   const upgrades = applyExplodeMarks(state, uniqueWins);
   const symbolsAfterExplode = [...state.symbols];
 

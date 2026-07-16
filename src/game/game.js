@@ -210,7 +210,14 @@ function paintBoard(symbols, multipliers, marks, winning = []) {
 
     gsap.set(node.tile, { clearProps: 'transform,filter,opacity' });
     gsap.set(node.glyph, { clearProps: 'transform,filter,opacity' });
-    gsap.set(node.mult, { clearProps: 'transform,filter,fontSize' });
+    // Do not clear left/top/right/bottom — badge must stay in the corner
+    gsap.set(node.mult, {
+      clearProps: 'scale,filter,fontSize,opacity,autoAlpha',
+      x: 0,
+      y: 0,
+      xPercent: 0,
+      yPercent: 0,
+    });
   }
 }
 
@@ -735,7 +742,6 @@ function animateDropIn(symbols, multipliers, marks) {
 }
 
 async function animateUpgrades(upgrades) {
-  // Multipliers are sticky and do not grow — skip pulse when nothing changed.
   const changed = (upgrades || []).filter(
     (up) => up.before.mult !== up.after.mult || up.before.marked !== up.after.marked,
   );
@@ -749,6 +755,19 @@ async function animateUpgrades(upgrades) {
     node.el.classList.add('is-marked');
     clearMultTier(node.mult);
     clearMultTier(node.el);
+
+    // Always pin badge to the cell corner — never re-center on multiply.
+    gsap.set([node.mult, node.mark], {
+      x: 0,
+      y: 0,
+      xPercent: 0,
+      yPercent: 0,
+      left: 'auto',
+      top: 'auto',
+      right: 1,
+      bottom: 1,
+      transformOrigin: '100% 100%',
+    });
 
     if (m > 0) {
       node.mult.textContent = `×${m}`;
@@ -766,21 +785,34 @@ async function animateUpgrades(upgrades) {
     }
 
     if (!reduceMotion) {
+      const el = pulseEls[pulseEls.length - 1];
       tl.fromTo(
-        pulseEls[pulseEls.length - 1],
-        { autoAlpha: 0.4, scale: 0.7 },
+        el,
+        { autoAlpha: 0.55, scale: 0.75 },
         {
           autoAlpha: 1,
           scale: 1,
-          duration: 0.34,
-          ease: 'back.out(1.8)',
+          duration: 0.32,
+          ease: 'back.out(1.6)',
+          // Keep GSAP from inventing a center translate
+          x: 0,
+          y: 0,
+          xPercent: 0,
+          yPercent: 0,
         },
         '<0.03',
       );
     }
   }
   if (!reduceMotion) await tl;
-  gsap.set(pulseEls, { clearProps: 'transform,filter' });
+  // Clear only scale/filter — leave corner anchors intact
+  gsap.set(pulseEls, {
+    clearProps: 'scale,filter,opacity,autoAlpha',
+    x: 0,
+    y: 0,
+    xPercent: 0,
+    yPercent: 0,
+  });
 }
 
 /**

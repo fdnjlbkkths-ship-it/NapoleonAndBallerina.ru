@@ -43,20 +43,24 @@ function seeded(seed = 1) {
   assert.equal(findClusters(symbols).length, 0);
 }
 
-// Sticky: explode does not grow or move multipliers
+// Sticky ladder on the same cell: mark → ×2 → ×4 → ×8
 {
   const state = createGameState(seeded(1));
   const cell = 10;
-  state.multipliers[cell] = 4;
-  state.marks[cell] = true;
+  assert.equal(state.multipliers[cell], 0);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.marks[cell], true);
+  assert.equal(state.multipliers[cell], 0);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.multipliers[cell], 2);
 
   applyExplodeMarks(state, [cell]);
   assert.equal(state.multipliers[cell], 4);
-  assert.equal(state.marks[cell], true);
 
   applyExplodeMarks(state, [cell]);
-  assert.equal(state.multipliers[cell], 4);
-  assert.equal(state.marks[cell], true);
+  assert.equal(state.multipliers[cell], 8);
 }
 
 {
@@ -96,11 +100,13 @@ function seeded(seed = 1) {
   const step = resolveTumbleStep(state);
   assert.ok(step);
   assert.ok(step.stepWin > 0);
-  // Multipliers stay put through explode + cascade
-  assert.equal(step.multipliersAfter[0], 8);
+  // Cell 0 upgrades in place ×8 → ×16; other wins start as marks
+  assert.equal(step.multipliersAfter[0], 16);
   assert.equal(step.marksAfter[0], true);
   for (const cell of step.winningCells) {
-    assert.equal(step.multipliersAfter[cell], cell === 0 ? 8 : 0);
+    if (cell === 0) continue;
+    assert.equal(step.multipliersAfter[cell], 0);
+    assert.equal(step.marksAfter[cell], true);
   }
 }
 
