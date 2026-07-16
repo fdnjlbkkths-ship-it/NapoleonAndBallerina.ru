@@ -355,29 +355,31 @@ body {
 
 .cell__mult {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  /* Empty sticky spot — centered when no fruit/pastry */
-  height: 1.35rem;
-  min-width: 1.35rem;
+  left: auto;
+  right: 1px;
+  top: auto;
+  bottom: 1px;
+  translate: none;
+  /* Always bottom-right of the cell */
+  height: 1.05rem;
+  min-width: 1.05rem;
   width: max-content;
-  max-width: 92%;
-  padding: 0 5px;
+  max-width: 70%;
+  padding: 0 4px;
   border-radius: 999px;
   font-family: var(--display);
   font-weight: 700;
-  font-size: 0.62rem !important;
-  line-height: 1.35rem !important;
+  font-size: 0.52rem !important;
+  line-height: 1.05rem !important;
   letter-spacing: 0;
   color: #1a0a12;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
   background: radial-gradient(circle at 35% 30%, #ffe9a8, var(--gold-deep));
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
   opacity: 0;
   transform: scale(0.8);
   pointer-events: none;
-  z-index: 3;
+  z-index: 4;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -387,23 +389,6 @@ body {
 .cell__mult.is-on {
   opacity: 0.95;
   transform: scale(1);
-}
-
-/* With a symbol present — tuck ×badge into the corner so icon stays clear */
-.cell:not(.is-empty) .cell__mult.is-on {
-  left: auto;
-  right: 1px;
-  top: auto;
-  bottom: 1px;
-  translate: none;
-  height: 1.05rem;
-  min-width: 1.05rem;
-  max-width: 70%;
-  padding: 0 4px;
-  font-size: 0.52rem !important;
-  line-height: 1.05rem !important;
-  z-index: 4;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* Multiplier colour tiers (value grows → colour shifts) */
@@ -599,10 +584,6 @@ body {
     drop-shadow(0 0 10px rgba(255, 77, 141, 0.65));
 }
 
-.cell.is-scatter:not(.is-empty) .cell__mult.is-on {
-  z-index: 4;
-}
-
 @keyframes fs-tile-pulse {
   0%, 100% { filter: brightness(1) saturate(1.1); }
   50% { filter: brightness(1.15) saturate(1.35); }
@@ -624,17 +605,20 @@ body {
 
 .cell__mark-dot {
   position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 14px;
-  height: 14px;
+  left: auto;
+  right: 3px;
+  top: auto;
+  bottom: 3px;
+  margin: 0;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff6c8, #ffd45a 55%, #f0a020);
   box-shadow:
-    0 0 10px rgba(255, 212, 90, 0.85),
+    0 0 8px rgba(255, 212, 90, 0.85),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
   opacity: 0;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
 }
 
