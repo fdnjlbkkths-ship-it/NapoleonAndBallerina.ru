@@ -155,15 +155,21 @@ body {
 .cell.is-win {
   background: var(--cell-win);
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 0 18px rgba(255, 77, 141, 0.45);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 0 22px rgba(255, 77, 141, 0.55);
+  z-index: 2;
+}
+
+.cell.is-exploding {
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.55), rgba(255, 77, 141, 0.35) 55%, transparent 70%);
 }
 
 .cell__glyph {
   font-size: clamp(1.2rem, 5.4vw, 1.65rem);
   line-height: 1;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.28));
-  will-change: transform, opacity;
+  will-change: transform, opacity, filter;
+  transform-origin: 50% 50%;
 }
 
 .cell__mult {
@@ -281,7 +287,7 @@ body {
 .cell__mult.mult-tier-1024 {
   background: linear-gradient(180deg, #ffffff, #ffd45a 40%, #ff2d6f);
   color: #2a0a18;
-  font-size: clamp(0.52rem, 2.3vw, 0.64rem);
+  padding: 0 6px; /* чуть шире под ×1024, высота/шрифт как у ×2 */
 }
 
 .cell__mark-dot {
@@ -310,6 +316,13 @@ body {
   z-index: 4;
 }
 
+.fx-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.35), transparent 60%);
+  opacity: 0;
+}
+
 .spark {
   position: absolute;
   width: 8px;
@@ -317,6 +330,43 @@ body {
   border-radius: 50%;
   background: var(--gold);
   box-shadow: 0 0 10px var(--pink);
+  will-change: transform, opacity;
+}
+
+.spark--glow {
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle, #fff 0%, #ffd45a 40%, rgba(255, 77, 141, 0) 70%);
+  box-shadow: 0 0 16px rgba(255, 212, 90, 0.8);
+}
+
+.spark--crumb {
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, #ffe9a8, #ff4d8d);
+  box-shadow: 0 0 6px rgba(255, 77, 141, 0.6);
+}
+
+.shockwave {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 18px rgba(255, 77, 141, 0.65);
+  opacity: 0.9;
+  will-change: transform, opacity;
+}
+
+.fly-glyph {
+  position: absolute;
+  font-size: clamp(1.2rem, 5.4vw, 1.65rem);
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.35));
+  will-change: transform, opacity, filter;
+  z-index: 6;
 }
 
 .float-num {

@@ -168,30 +168,181 @@ function showToast(text) {
   );
 }
 
-function burstSparks(cellIndex, count = 8) {
-  if (reduceMotion) return;
+function cellCenterInFx(cellIndex) {
   const rect = cellNodes[cellIndex].el.getBoundingClientRect();
   const boardRect = els.fx.getBoundingClientRect();
-  const cx = rect.left - boardRect.left + rect.width / 2;
-  const cy = rect.top - boardRect.top + rect.height / 2;
+  return {
+    x: rect.left - boardRect.left + rect.width / 2,
+    y: rect.top - boardRect.top + rect.height / 2,
+    w: rect.width,
+    h: rect.height,
+  };
+}
+
+function spawnFxNode(className, x, y) {
+  const node = document.createElement('div');
+  node.className = className;
+  node.style.left = `${x}px`;
+  node.style.top = `${y}px`;
+  els.fx.appendChild(node);
+  return node;
+}
+
+function burstShockwave(cellIndex) {
+  if (reduceMotion) return;
+  const { x, y } = cellCenterInFx(cellIndex);
+  const wave = spawnFxNode('shockwave', x, y);
+  gsap.fromTo(
+    wave,
+    { scale: 0.35, opacity: 0.95 },
+    {
+      scale: 3.2,
+      opacity: 0,
+      duration: 0.55,
+      ease: 'power2.out',
+      onComplete: () => wave.remove(),
+    },
+  );
+}
+
+function burstSparks(cellIndex, count = 12) {
+  if (reduceMotion) return;
+  const { x, y } = cellCenterInFx(cellIndex);
 
   for (let i = 0; i < count; i += 1) {
-    const spark = document.createElement('div');
-    spark.className = 'spark';
-    spark.style.left = `${cx}px`;
-    spark.style.top = `${cy}px`;
-    els.fx.appendChild(spark);
-    const angle = (Math.PI * 2 * i) / count;
-    gsap.to(spark, {
-      x: Math.cos(angle) * gsap.utils.random(18, 36),
-      y: Math.sin(angle) * gsap.utils.random(18, 36),
-      opacity: 0,
-      scale: 0.2,
-      duration: 0.45,
-      ease: 'power2.out',
-      onComplete: () => spark.remove(),
-    });
+    const isGlow = i % 3 === 0;
+    const spark = spawnFxNode(isGlow ? 'spark spark--glow' : 'spark spark--crumb', x, y);
+    const angle = (Math.PI * 2 * i) / count + gsap.utils.random(-0.2, 0.2);
+    const dist = gsap.utils.random(isGlow ? 22 : 16, isGlow ? 48 : 40);
+    gsap.fromTo(
+      spark,
+      { scale: isGlow ? 0.6 : 1, opacity: 1, rotation: 0 },
+      {
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist + gsap.utils.random(4, 18),
+        opacity: 0,
+        scale: 0,
+        rotation: gsap.utils.random(-180, 180),
+        duration: gsap.utils.random(0.45, 0.7),
+        ease: 'power3.out',
+        onComplete: () => spark.remove(),
+      },
+    );
   }
+}
+
+function boardFlash() {
+  if (reduceMotion) return;
+  let flash = els.fx.querySelector('.fx-flash');
+  if (!flash) {
+    flash = document.createElement('div');
+    flash.className = 'fx-flash';
+    els.fx.appendChild(flash);
+  }
+  gsap.fromTo(
+    flash,
+    { opacity: 0.55 },
+    { opacity: 0, duration: 0.45, ease: 'power2.out' },
+  );
+}
+
+/** Clone winning glyphs into FX layer and explode them outward. */
+async function explodeCells(winningCells) {
+  if (reduceMotion) {
+    winningCells.forEach((i) => {
+      cellNodes[i].glyph.textContent = '';
+    });
+    return;
+  }
+
+  const winEls = winningCells.map((i) => cellNodes[i].el);
+  const winGlyphs = winningCells.map((i) => cellNodes[i].glyph);
+
+  // 1) Anticipation pulse + glow
+  await gsap
+    .timeline()
+    .to(winEls, {
+      scale: 1.1,
+      duration: 0.26,
+      ease: 'power2.out',
+      stagger: { each: 0.02, from: 'center' },
+    })
+    .to(
+      winGlyphs,
+      {
+        scale: 1.22,
+        filter: 'brightness(1.4) saturate(1.25)',
+        duration: 0.26,
+        ease: 'power2.out',
+        stagger: { each: 0.02, from: 'center' },
+      },
+      '<',
+    )
+    .to(winGlyphs, {
+      scaleX: 1.28,
+      scaleY: 0.82,
+      duration: 0.14,
+      ease: 'power2.in',
+    });
+
+  boardFlash();
+
+  // 2) Launch clones + shockwaves + particles
+  const flyTl = gsap.timeline();
+  winningCells.forEach((i, order) => {
+    const node = cellNodes[i];
+    const glyphText = node.glyph.textContent;
+    const { x, y } = cellCenterInFx(i);
+    node.el.classList.add('is-exploding');
+
+    const fly = spawnFxNode('fly-glyph', x, y);
+    fly.textContent = glyphText;
+    fly.style.fontSize = getComputedStyle(node.glyph).fontSize;
+    gsap.set(fly, { x: 0, y: 0, xPercent: -50, yPercent: -50 });
+
+    node.glyph.textContent = '';
+    gsap.set(node.glyph, { clearProps: 'transform,filter,opacity' });
+
+    const angle = gsap.utils.random(-Math.PI, Math.PI);
+    const dist = gsap.utils.random(30, 58);
+    const spin = gsap.utils.random(-180, 180);
+    const start = order * 0.022;
+
+    flyTl.fromTo(
+      fly,
+      { scale: 1.2, opacity: 1, rotation: 0, x: 0, y: 0 },
+      {
+        x: Math.cos(angle) * dist,
+        y: Math.sin(angle) * dist - 12,
+        scale: 0.12,
+        rotation: spin,
+        opacity: 0,
+        duration: 0.58,
+        ease: 'power3.in',
+        onComplete: () => fly.remove(),
+      },
+      start,
+    );
+
+    flyTl.add(() => {
+      burstShockwave(i);
+      burstSparks(i, 14);
+    }, start);
+
+    flyTl.to(
+      node.el,
+      {
+        scale: 1,
+        duration: 0.4,
+        ease: 'power2.out',
+        onComplete: () => node.el.classList.remove('is-exploding'),
+      },
+      start + 0.18,
+    );
+  });
+
+  await flyTl;
+  gsap.set(winEls, { clearProps: 'transform' });
 }
 
 function floatWin(amount) {
@@ -354,47 +505,40 @@ async function animateCascadeFalls(step) {
 async function animateStep(step) {
   paintBoard(step.symbolsBefore, step.multipliersBefore, step.marksBefore, step.winningCells);
 
-  const winEls = step.winningCells.map((i) => cellNodes[i].el);
-  const winGlyphs = step.winningCells.map((i) => cellNodes[i].glyph);
-
+  // Subtle pre-highlight before the pop
   if (!reduceMotion) {
-    await gsap
-      .timeline()
-      .to(winEls, {
-        scale: 1.12,
-        duration: 0.28,
-        ease: 'power1.out',
-        stagger: 0.03,
-      })
-      .to(winEls, {
-        scale: 1,
-        duration: 0.22,
-        ease: 'power1.in',
-      });
+    const winEls = step.winningCells.map((i) => cellNodes[i].el);
+    await gsap.fromTo(
+      winEls,
+      { boxShadow: 'inset 0 0 0 0 rgba(255,255,255,0)' },
+      {
+        boxShadow: 'inset 0 0 0 2px rgba(255,255,255,0.7)',
+        duration: 0.2,
+        stagger: { each: 0.015, from: 'center' },
+        ease: 'sine.out',
+      },
+    );
   }
 
   floatWin(step.stepWin);
-  step.winningCells.forEach((i) => burstSparks(i, 7));
-
-  if (!reduceMotion) {
-    await gsap.to(winGlyphs, {
-      scale: 1.4,
-      opacity: 0,
-      duration: 0.38,
-      stagger: 0.025,
-      ease: 'power2.in',
-    });
+  if (tg?.HapticFeedback) {
+    try {
+      tg.HapticFeedback.impactOccurred('medium');
+    } catch {
+      /* ignore */
+    }
   }
+  await explodeCells(step.winningCells);
 
   for (const i of step.winningCells) {
-    cellNodes[i].glyph.textContent = '';
-    gsap.set(cellNodes[i].glyph, { clearProps: 'transform,opacity' });
+    cellNodes[i].el.classList.remove('is-win', 'is-exploding');
+    gsap.set(cellNodes[i].glyph, { clearProps: 'transform,filter,opacity' });
   }
 
   await animateUpgrades(step.upgrades);
-  await wait(180);
+  await wait(160);
   await animateCascadeFalls(step);
-  await wait(220);
+  await wait(200);
 }
 
 async function runResult(result) {
