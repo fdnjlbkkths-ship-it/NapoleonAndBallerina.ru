@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # One-shot deploy of Sweet Rush onto the live bakery site (napoleon-balerina).
+# Pushes straight to main so GitHub Pages Actions can publish.
 set -euo pipefail
 
 SITE_DIR="${1:-$HOME/napoleon-balerina}"
@@ -14,7 +15,6 @@ cd "$SITE_DIR"
 git fetch origin
 git checkout main
 git pull origin main
-git checkout -B cursor/sweet-rush-game-e563
 
 echo "Копирую игру…"
 cp "$PKG_DIR/game.html" .
@@ -78,10 +78,16 @@ npm run test:game
 GITHUB_ACTIONS=true GITHUB_REPOSITORY=fdnjlbkkths-ship-it/napoleon-balerina npm run build
 
 git add game.html src/game vite.config.js package.json index.html
-git commit -m "Add Sweet Rush bonus game" || echo "nothing to commit"
-git push -u origin cursor/sweet-rush-game-e563
+if git diff --cached --quiet; then
+  echo "Изменений нет — игра уже в репозитории."
+else
+  git commit -m "Add Sweet Rush bonus game"
+fi
+
+echo "Пушу в main…"
+git push origin main
 
 echo ""
-echo "Готово. Создайте PR в main (или merge), Actions задеплоит Pages."
+echo "OK: код в main. Через 1–2 мин Actions выложит Pages."
 echo "Игра: https://fdnjlbkkths-ship-it.github.io/napoleon-balerina/game.html"
 echo "Меню: https://fdnjlbkkths-ship-it.github.io/napoleon-balerina/menu.html"
