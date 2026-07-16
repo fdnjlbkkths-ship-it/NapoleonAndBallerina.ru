@@ -15,6 +15,20 @@ export default defineConfig({
         contacts: resolve(__dirname, 'contacts.html'),
         game: resolve(__dirname, 'game.html'),
       },
+      output: {
+        // Stable names so GitHub Pages can load committed assets without hash churn.
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: (info) => {
+          const name = info.name || '';
+          if (name.endsWith('.css')) {
+            // game.html stylesheet → assets/game.css
+            if (name.includes('game') || name.includes('style')) return 'assets/game.css';
+            return 'assets/[name][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        },
+      },
     },
   },
   server: {

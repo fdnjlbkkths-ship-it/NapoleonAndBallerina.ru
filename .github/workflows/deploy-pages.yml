@@ -32,10 +32,8 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
-        env:
-          # Project Pages URL: https://<user>.github.io/NapoleonAndBallerina.ru/
-          VITE_BASE: /NapoleonAndBallerina.ru/
+        # Also refreshes root assets/ used when Pages is still on "Deploy from branch"
+        run: npm run build:pages
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

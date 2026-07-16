@@ -6,7 +6,7 @@
   <meta name="description" content="Sweet Rush 1000 — бонус в стиле Sugar Rush 1000. Валюта Вардин. Промокоды для кондитерской.">
   <meta name="theme-color" content="#2a0f3d">
   <title>Sweet Rush 1000</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
@@ -168,6 +168,22 @@
     </div>
   </div>
 
+  <!-- GitHub Pages serves raw HTML from main — load committed production bundle -->
+  <script>
+    (function () {
+      if (!/\.github\.io$/i.test(location.hostname)) return;
+      var base = '/NapoleonAndBallerina.ru';
+      var css = document.createElement('link');
+      css.rel = 'stylesheet';
+      css.href = base + '/assets/game.css';
+      document.head.appendChild(css);
+      var js = document.createElement('script');
+      js.type = 'module';
+      js.src = base + '/assets/game.js';
+      document.head.appendChild(js);
+    })();
+  </script>
+  <!-- Local Vite / preview entry (404 on GitHub Pages — ignored) -->
   <script type="module" src="/src/game/game.js"></script>
 </body>
 </html>

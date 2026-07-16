@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:pages": "VITE_BASE=/NapoleonAndBallerina.ru/ vite build && mkdir -p assets && cp -f dist/assets/game.js dist/assets/game.css assets/ && cp -f public/favicon.svg favicon.svg",
     "preview": "vite preview",
     "test:game": "node src/game/engine.test.mjs && node src/game/promo.test.mjs"
   },
