@@ -3,63 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Sweet Rush — сладкий бонус с эклерами, Анной Павловой и тортиками. Без ставок, только красивые цифры.">
-  <meta name="theme-color" content="#2a1814">
-  <title>Sweet Rush — бонус Sweet Master</title>
+  <meta name="description" content="Sweet Rush — бонус в стиле Sugar Rush 1000. Валюта Вардин (1:1 ₽). Без реального вывода.">
+  <meta name="theme-color" content="#1a0f2e">
+  <title>Sweet Rush 1000</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,550;9..144,700&family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <main class="game" id="app">
-    <header class="game__top">
-      <div class="brand">
-        <div class="brand__name">Sweet Rush</div>
-        <p class="brand__tag">Бонус ×1000 · без ставок, только десерт</p>
+  <main class="slot" id="app">
+    <header class="slot__header">
+      <div class="logo">
+        <span class="logo__sweet">SWEET</span>
+        <span class="logo__rush">RUSH</span>
+        <span class="logo__1k">1000</span>
       </div>
-      <span class="pill" title="Режим без азарта">🍰 demo</span>
+      <div class="fs-badge is-hidden" id="fs-badge">
+        <span class="fs-badge__label">FREE SPINS</span>
+        <span class="fs-badge__value" id="stat-spins">0</span>
+      </div>
     </header>
-
-    <section class="stats" aria-label="Счётчики">
-      <div class="stat">
-        <span class="stat__label">Фриспины</span>
-        <span class="stat__value" id="stat-spins">10</span>
-      </div>
-      <div class="stat">
-        <span class="stat__label">Спин</span>
-        <span class="stat__value" id="stat-win">0</span>
-      </div>
-      <div class="stat">
-        <span class="stat__label">Всего</span>
-        <span class="stat__value stat__value--gold" id="stat-total">0</span>
-      </div>
-    </section>
 
     <section class="board-wrap" aria-label="Игровое поле">
       <div class="board" id="board" role="grid" aria-rowcount="7" aria-colcount="7"></div>
       <div class="fx-layer" id="fx-layer" aria-hidden="true"></div>
+      <div class="win-banner is-hidden" id="win-banner">
+        <span id="win-banner-text">0</span>
+        <small>Вардин</small>
+      </div>
     </section>
 
-    <p class="hint" id="status">Кластеры из 5+ одинаковых фигурок · каскады · липкие множители</p>
+    <section class="hud" aria-label="Панель">
+      <div class="hud__meters">
+        <div class="meter">
+          <span class="meter__label">CREDIT</span>
+          <span class="meter__value" id="stat-balance">100 000</span>
+          <span class="meter__unit">Вардин</span>
+        </div>
+        <div class="meter meter--win">
+          <span class="meter__label">WIN</span>
+          <span class="meter__value" id="stat-win">0</span>
+          <span class="meter__unit">Вардин</span>
+        </div>
+      </div>
 
-    <div class="legend" id="legend" aria-label="Фигурки"></div>
+      <div class="hud__center">
+        <div class="bet-ctrl">
+          <button type="button" class="bet-ctrl__btn" id="btn-bet-minus" aria-label="Меньше ставка">−</button>
+          <div class="bet-ctrl__info">
+            <span class="bet-ctrl__label">BET</span>
+            <span class="bet-ctrl__value" id="stat-bet">100</span>
+          </div>
+          <button type="button" class="bet-ctrl__btn" id="btn-bet-plus" aria-label="Больше ставка">+</button>
+        </div>
 
-    <div class="controls">
-      <button type="button" class="btn btn--primary" id="btn-play">Запустить бонус</button>
-      <button type="button" class="btn btn--ghost" id="btn-auto">Автобонус</button>
-    </div>
+        <button type="button" class="spin-btn" id="btn-spin" aria-label="Крутить">
+          <span class="spin-btn__ring"></span>
+          <span class="spin-btn__label" id="spin-label">SPIN</span>
+        </button>
+      </div>
+
+      <div class="buy-row">
+        <button type="button" class="buy-btn" id="btn-buy">
+          <span class="buy-btn__title">BUY BONUS</span>
+          <span class="buy-btn__cost" id="buy-cost">100× · 10 000 Вардин</span>
+        </button>
+        <button type="button" class="buy-btn buy-btn--super" id="btn-buy-super">
+          <span class="buy-btn__title">SUPER BUY</span>
+          <span class="buy-btn__cost" id="super-cost">500× · 50 000 Вардин</span>
+        </button>
+      </div>
+
+      <p class="hint" id="status">Кластер 5+ · взрыв → метка → ×2 → ×4 → ×8… · 1 Вардин = 1 ₽</p>
+    </section>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+  <div class="overlay" id="buy-overlay" role="dialog" aria-modal="true">
     <div class="overlay__card">
-      <h2 id="overlay-title">Бонус готов</h2>
-      <p>Красивые сладкие очки за этот заход — без ставок и вывода.</p>
-      <div class="overlay__points" id="overlay-points">0</div>
-      <button type="button" class="btn btn--primary" id="overlay-close">Закрыть</button>
+      <h2 id="buy-overlay-title">Купить бонус</h2>
+      <p id="buy-overlay-text">10 фриспинов с липкими множителями</p>
+      <div class="overlay__price" id="buy-overlay-price">0 Вардин</div>
+      <div class="overlay__actions">
+        <button type="button" class="btn btn--ghost" id="buy-cancel">Отмена</button>
+        <button type="button" class="btn btn--primary" id="buy-confirm">Купить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="overlay__card">
+      <h2>Бонус завершён</h2>
+      <p>Выигрыш за раунд (1 Вардин = 1 ₽)</p>
+      <div class="overlay__price" id="overlay-points">0 Вардин</div>
+      <button type="button" class="btn btn--primary" id="overlay-close">OK</button>
     </div>
   </div>
 

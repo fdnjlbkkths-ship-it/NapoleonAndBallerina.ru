@@ -3,11 +3,16 @@ import {
   GRID_SIZE,
   MIN_CLUSTER,
   MULT_LADDER,
-  createBonusState,
+  createGameState,
   fillEmptyCells,
   findClusters,
-  playFreeSpin,
+  applyExplodeMarks,
   resolveTumbleStep,
+  playBaseSpin,
+  buyBonus,
+  playFreeSpin,
+  buildSuperMultiplierGrid,
+  nextMultiplier,
 } from './engine.js';
 
 function seeded(seed = 1) {
@@ -18,63 +23,88 @@ function seeded(seed = 1) {
   };
 }
 
-// Cluster detection
 {
   const symbols = Array(GRID_SIZE * GRID_SIZE).fill('cake');
-  const clusters = findClusters(symbols);
-  assert.equal(clusters.length, 1);
-  assert.equal(clusters[0].cells.length, GRID_SIZE * GRID_SIZE);
+  assert.equal(findClusters(symbols).length, 1);
 }
 
-// No cluster below threshold
 {
   const symbols = Array(GRID_SIZE * GRID_SIZE).fill(null);
   for (let i = 0; i < MIN_CLUSTER - 1; i += 1) symbols[i] = 'eclair';
   assert.equal(findClusters(symbols).length, 0);
 }
 
-// Sticky multipliers persist across free spins
+// Mark → ×2 → ×4 → ×8
 {
-  const state = createBonusState(seeded(42));
-  state.multipliers[0] = 2;
-  state.multipliers[3] = 4;
-  fillEmptyCells(state);
-  const before = [...state.multipliers];
-  playFreeSpin(state);
-  // Cells that had multipliers should still be >= previous (sticky / upgrade)
-  assert.ok(state.multipliers[0] >= before[0]);
-  assert.ok(state.multipliers[3] >= before[3]);
+  const state = createGameState(seeded(1));
+  const cell = 10;
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.marks[cell], true);
+  assert.equal(state.multipliers[cell], 0);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.multipliers[cell], 2);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.multipliers[cell], 4);
+
+  applyExplodeMarks(state, [cell]);
+  assert.equal(state.multipliers[cell], 8);
 }
 
-// Ladder caps at 1024
 {
-  assert.equal(MULT_LADDER[MULT_LADDER.length - 1], 1024);
+  assert.equal(nextMultiplier(512), 1024);
+  assert.equal(nextMultiplier(1024), 1024);
+  assert.equal(MULT_LADDER.at(-1), 1024);
 }
 
-// Full bonus run finishes
 {
-  const state = createBonusState(seeded(7));
-  fillEmptyCells(state);
-  let guard = 0;
-  while (!state.finished && guard < 200) {
-    playFreeSpin(state);
-    guard += 1;
-  }
-  assert.equal(state.finished, true);
-  assert.ok(state.sweetPoints >= 0);
+  const grid = buildSuperMultiplierGrid();
+  const center = Math.floor((GRID_SIZE * GRID_SIZE) / 2);
+  assert.equal(grid[center], 16);
+  assert.ok(grid.every((m) => m >= 2));
 }
 
-// Tumble step snapshot shape
 {
-  const state = createBonusState(seeded(99));
+  const state = createGameState(seeded(99));
   state.symbols = Array(GRID_SIZE * GRID_SIZE).fill('berry');
-  state.multipliers = Array(GRID_SIZE * GRID_SIZE).fill(0);
-  state.multipliers[10] = 2;
+  state.multipliers[5] = 2;
+  state.marks[5] = true;
   const step = resolveTumbleStep(state);
   assert.ok(step);
-  assert.ok(step.symbolsBefore);
-  assert.ok(step.symbolsAfter);
   assert.ok(step.stepWin > 0);
+  assert.ok(step.upgrades.length > 0);
+  // Cell 5 had ×2 and exploded → should become ×4
+  const up = step.upgrades.find((u) => u.cell === 5);
+  assert.ok(up);
+  assert.equal(up.after.mult, 4);
+}
+
+{
+  const state = createGameState(seeded(3));
+  fillEmptyCells(state);
+  const spin = playBaseSpin(state);
+  assert.equal(spin.ok, true);
+  // Base resets marks after spin
+  assert.ok(state.marks.every((m) => m === false));
+  assert.ok(state.multipliers.every((m) => m === 0));
+}
+
+{
+  const state = createGameState(seeded(11));
+  state.bet = 100;
+  const bought = buyBonus(state, { superBonus: false });
+  assert.equal(bought.ok, true);
+  assert.equal(state.mode, 'bonus');
+  assert.equal(state.spinsLeft, 10);
+
+  // Sticky: plant a multiplier and ensure it survives a free spin
+  state.multipliers[0] = 8;
+  state.marks[0] = true;
+  const fs = playFreeSpin(state);
+  assert.equal(fs.ok, true);
+  assert.equal(state.mode, 'bonus');
+  assert.ok(state.multipliers[0] >= 8);
 }
 
 console.log('engine.test.mjs: all passed');
